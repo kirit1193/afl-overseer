@@ -1,0 +1,106 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "afl-overseer"
+version = "0.1.0"
+description = "Monitoring and visualization tool for AFL/AFL++ fuzzing campaigns"
+readme = "README.md"
+license = "MIT"
+authors = [
+    {name = "AFL Overseer Contributors"}
+]
+maintainers = [
+    {name = "AFL Overseer Contributors"}
+]
+keywords = [
+    "afl",
+    "afl++",
+    "fuzzing",
+    "monitoring",
+    "visualization",
+    "security",
+    "testing"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Monitoring",
+    "Topic :: Utilities",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "psutil>=5.9.0",
+    "textual>=0.40.0",
+    "aiohttp>=3.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "isort>=5.12.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/kirit1193/afl-overseer"
+Repository = "https://github.com/kirit1193/afl-overseer"
+"Bug Tracker" = "https://github.com/kirit1193/afl-overseer/issues"
+Documentation = "https://github.com/kirit1193/afl-overseer#readme"
+
+[project.scripts]
+afl-overseer = "src.cli:main"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.setuptools.package-data]
+src = ["*.py"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "--verbose --cov=src --cov-report=term-missing"

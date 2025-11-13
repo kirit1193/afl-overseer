@@ -1,5 +1,7 @@
 """Core monitoring logic for AFL fuzzing campaigns."""
 
+from __future__ import annotations
+
 import time
 import json
 import threading
@@ -14,6 +16,7 @@ import logging
 from .models import FuzzerStats, CampaignSummary, MonitorConfig
 from .parser import FuzzerStatsParser, PlotDataParser, discover_fuzzers
 from .process import ProcessMonitor, ProcessValidator
+from . import constants
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +32,8 @@ class AFLMonitor:
         self.config = config
         self._previous_summary: Optional[CampaignSummary] = None
         self._summary_lock = threading.Lock()  # Instance lock for previous_summary
-        self.state_file = Path.home() / ".afl-monitor-ng.json"
-        self.state_lock_file = Path.home() / ".afl-monitor-ng.lock"
+        self.state_file = Path.home() / constants.STATE_FILE_NAME
+        self.state_lock_file = Path.home() / constants.STATE_LOCK_FILE_NAME
 
     def collect_stats(self) -> tuple[List[FuzzerStats], CampaignSummary]:
         """
@@ -50,7 +53,7 @@ class AFLMonitor:
         # Parse each fuzzer in parallel for better performance
         if len(fuzzer_dirs) > 1:
             # Limit workers to avoid overwhelming the system
-            max_workers = min(len(fuzzer_dirs), 10)
+            max_workers = min(len(fuzzer_dirs), constants.MAX_WORKER_THREADS)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks and collect futures (no shared state mutation)
                 futures = [

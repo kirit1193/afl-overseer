@@ -95,6 +95,10 @@ class SummaryPanel(Static):
         last_find_display = format_time_ago(s.last_find_time) if s.last_find_time > 0 else "never"
         left_col.append(f"[#808080]last find:[/#808080] {last_find_display}")
 
+        # Total pending paths - ALWAYS show
+        pending_color = "#d7af5f" if s.total_pending > 1000 else "#5f8787" if s.total_pending > 0 else "#4e4e4e"
+        left_col.append(f"[#808080] pending:[/#808080] [{pending_color}]{s.total_pending}[/{pending_color}] paths [dim]({s.total_pending_favs} favs)[/dim]")
+
         # Cycles without finds indicator - ALWAYS show
         if s.cycles_wo_finds and s.cycles_wo_finds != "N/A" and s.total_fuzzers > 0:
             cwof_display = s.cycles_wo_finds
@@ -400,7 +404,7 @@ class AFLMonitorApp(App):
     }
 
     SummaryPanel {
-        height: 14;
+        height: 15;
         background: #0f0f0f;
         border: solid #2a2a2a;
         padding: 1 2;

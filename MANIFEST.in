@@ -1,0 +1,16 @@
+# Include documentation and metadata
+include README.md
+include LICENSE
+include requirements.txt
+
+# Include the main entry point script
+include afl-overseer
+
+# Include all Python files in src
+recursive-include src *.py
+
+# Exclude compiled Python files and caches
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *$py.class
+global-exclude .DS_Store

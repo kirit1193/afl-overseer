@@ -920,7 +920,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
 class WebServer:
-    """Web server for AFL Overseer dashboard."""
+    """Web server for AFL Overseer dashboard with thread-safe request handling."""
 
     def __init__(self, findings_dir: Path, refresh_interval: int = 5):
         self.findings_dir = findings_dir
@@ -945,6 +945,9 @@ class WebServer:
 
         self.monitor = AFLMonitor(self.config)
 
+        # Async lock for thread-safe request handling (prevents concurrent stats collection)
+        self._stats_lock = asyncio.Lock()
+
     def setup_routes(self):
         """Setup web server routes."""
         self.app.router.add_get('/', self.handle_index)
@@ -956,98 +959,108 @@ class WebServer:
         return web.Response(text=html, content_type='text/html')
 
     async def handle_stats(self, request):
-        """API endpoint for fuzzer statistics with error handling."""
-        try:
-            # Load previous state (non-critical)
+        """
+        API endpoint for fuzzer statistics with thread-safe handling.
+        Uses async lock to prevent concurrent request interference.
+        """
+        # Acquire lock to prevent concurrent stats collection
+        async with self._stats_lock:
             try:
-                self.monitor.load_previous_state()
-            except Exception:
-                pass  # State loading is non-critical
+                # Load previous state (non-critical)
+                try:
+                    self.monitor.load_previous_state()
+                except Exception:
+                    pass  # State loading is non-critical
 
-            # Collect statistics
-            try:
-                all_stats, summary = self.monitor.collect_stats()
-            except Exception as e:
-                logging.error(f"Failed to collect stats: {e}")
-                return web.json_response(
-                    {'error': 'Failed to collect statistics', 'detail': str(e)},
-                    status=500
-                )
+                # Collect statistics (runs in thread pool, but protected by async lock)
+                try:
+                    loop = asyncio.get_event_loop()
+                    all_stats, summary = await loop.run_in_executor(
+                        None, self.monitor.collect_stats
+                    )
+                except Exception as e:
+                    logging.error(f"Failed to collect stats: {e}")
+                    return web.json_response(
+                        {'error': 'Failed to collect statistics', 'detail': str(e)},
+                        status=500
+                    )
 
-            # Get system info with fallback
-            try:
-                system_info = ProcessMonitor.get_system_info()
-            except Exception as e:
-                logging.warning(f"Failed to get system info: {e}")
-                system_info = {
-                    'cpu_count': 0, 'cpu_percent': 0,
-                    'memory_total_gb': 0, 'memory_used_gb': 0, 'memory_percent': 0
+                # Get system info with fallback (run in executor to avoid blocking)
+                try:
+                    system_info = await loop.run_in_executor(
+                        None, ProcessMonitor.get_system_info
+                    )
+                except Exception as e:
+                    logging.warning(f"Failed to get system info: {e}")
+                    system_info = {
+                        'cpu_count': 0, 'cpu_percent': 0,
+                        'memory_total_gb': 0, 'memory_used_gb': 0, 'memory_percent': 0
+                    }
+
+                # Save state (non-critical)
+                try:
+                    self.monitor.save_current_state(summary)
+                except Exception:
+                    pass  # State saving is non-critical
+
+                # Format response
+                response_data = {
+                    'summary': {
+                        'alive_fuzzers': summary.alive_fuzzers,
+                        'total_fuzzers': summary.total_fuzzers,
+                        'total_execs': summary.total_execs,
+                        'current_speed': summary.total_speed,
+                        'avg_speed': summary.current_avg_speed,
+                        'max_coverage': summary.max_coverage,
+                        'avg_coverage': summary.max_coverage,
+                        'total_crashes': summary.total_crashes,
+                        'total_hangs': summary.total_hangs,
+                        'corpus_count': summary.total_corpus,
+                        'corpus_favored': 0,  # Calculate from all_stats
+                        'pending_total': summary.total_pending,
+                        'pending_favored': summary.total_pending_favs,
+                        'avg_stability': summary.avg_stability,
+                        'min_stability': summary.min_stability,
+                        'max_stability': summary.max_stability,
+                        'avg_cycle': summary.avg_cycle,
+                        'max_cycle': summary.max_cycle,
+                    },
+                    'system': {
+                        'cpu_cores': system_info.get('cpu_count', 0),
+                        'cpu_percent': system_info.get('cpu_percent', 0),
+                        'memory_total_gb': system_info.get('memory_total_gb', 0),
+                        'memory_used_gb': system_info.get('memory_used_gb', 0),
+                        'memory_percent': system_info.get('memory_percent', 0),
+                    },
+                    'fuzzers': [
+                        {
+                            'name': stats.fuzzer_name,
+                            'status': stats.status.value if hasattr(stats.status, 'value') else str(stats.status),
+                            'run_time': stats.run_time,
+                            'execs_done': stats.execs_done,
+                            'exec_speed': stats.execs_per_sec,
+                            'bitmap_cvg': stats.bitmap_cvg,
+                            'saved_crashes': stats.saved_crashes,
+                            'saved_hangs': stats.saved_hangs,
+                            'corpus_count': stats.corpus_count,
+                            'stability': stats.stability,
+                            'cpu_percent': stats.cpu_usage,
+                            'memory_percent': stats.memory_usage,
+                            'slowest_exec_ms': stats.slowest_exec_ms,
+                            'exec_timeout': stats.exec_timeout,
+                        }
+                        for stats in all_stats
+                    ]
                 }
 
-            # Save state (non-critical)
-            try:
-                self.monitor.save_current_state(summary)
-            except Exception:
-                pass  # State saving is non-critical
+                return web.json_response(response_data)
 
-            # Format response
-            response_data = {
-                'summary': {
-                    'alive_fuzzers': summary.alive_fuzzers,
-                    'total_fuzzers': summary.total_fuzzers,
-                    'total_execs': summary.total_execs,
-                    'current_speed': summary.total_speed,
-                    'avg_speed': summary.current_avg_speed,
-                    'max_coverage': summary.max_coverage,
-                    'avg_coverage': summary.max_coverage,
-                    'total_crashes': summary.total_crashes,
-                    'total_hangs': summary.total_hangs,
-                    'corpus_count': summary.total_corpus,
-                    'corpus_favored': 0,  # Calculate from all_stats
-                    'pending_total': summary.total_pending,
-                    'pending_favored': summary.total_pending_favs,
-                    'avg_stability': summary.avg_stability,
-                    'min_stability': summary.min_stability,
-                    'max_stability': summary.max_stability,
-                    'avg_cycle': summary.avg_cycle,
-                    'max_cycle': summary.max_cycle,
-                },
-                'system': {
-                    'cpu_cores': system_info.get('cpu_count', 0),
-                    'cpu_percent': system_info.get('cpu_percent', 0),
-                    'memory_total_gb': system_info.get('memory_total_gb', 0),
-                    'memory_used_gb': system_info.get('memory_used_gb', 0),
-                    'memory_percent': system_info.get('memory_percent', 0),
-                },
-                'fuzzers': [
-                    {
-                        'name': stats.fuzzer_name,
-                        'status': stats.status.value if hasattr(stats.status, 'value') else str(stats.status),
-                        'run_time': stats.run_time,
-                        'execs_done': stats.execs_done,
-                        'exec_speed': stats.execs_per_sec,
-                        'bitmap_cvg': stats.bitmap_cvg,
-                        'saved_crashes': stats.saved_crashes,
-                        'saved_hangs': stats.saved_hangs,
-                        'corpus_count': stats.corpus_count,
-                        'stability': stats.stability,
-                        'cpu_percent': stats.cpu_usage,
-                        'memory_percent': stats.memory_usage,
-                        'slowest_exec_ms': stats.slowest_exec_ms,
-                        'exec_timeout': stats.exec_timeout,
-                    }
-                    for stats in all_stats
-                ]
-            }
-
-            return web.json_response(response_data)
-
-        except Exception as e:
-            logging.error(f"Unexpected error in stats endpoint: {e}")
-            return web.json_response(
-                {'error': 'Internal server error', 'detail': str(e)},
-                status=500
-            )
+            except Exception as e:
+                logging.error(f"Unexpected error in stats endpoint: {e}")
+                return web.json_response(
+                    {'error': 'Internal server error', 'detail': str(e)},
+                    status=500
+                )
 
 
 def _run_web_server_in_thread(findings_dir: Path, port: int, refresh_interval: int):
