@@ -3,7 +3,7 @@
 AFL Overseer
 Advanced monitoring and visualization tool for AFL/AFL++ fuzzing campaigns
 
-Copyright 2024. Licensed under the Apache License, Version 2.0.
+Copyright 2024. Licensed under the MIT License.
 """
 
 import sys
@@ -14,6 +14,66 @@ from pathlib import Path
 if sys.version_info < (3, 8):
     print("Error: Python 3.8 or higher is required", file=sys.stderr)
     sys.exit(1)
+
+# Check dependencies before importing
+def check_dependencies():
+    """Check if required dependencies are installed and compatible."""
+    missing = []
+    outdated = []
+
+    # Check for required packages
+    try:
+        import click
+    except ImportError:
+        missing.append("click>=8.1.0")
+
+    try:
+        import rich
+    except ImportError:
+        missing.append("rich>=13.0.0")
+
+    try:
+        import psutil
+    except ImportError:
+        missing.append("psutil>=5.9.0")
+
+    try:
+        import textual
+        # Check if Textual has ComposeResult (added in 0.40.0)
+        from textual.app import ComposeResult
+    except ImportError:
+        missing.append("textual>=0.40.0")
+    except (ImportError, AttributeError):
+        outdated.append("textual>=0.40.0 (current version is too old)")
+
+    try:
+        import aiohttp
+    except ImportError:
+        missing.append("aiohttp>=3.8.0")
+
+    if missing or outdated:
+        print("\n❌ Missing or outdated dependencies detected!\n", file=sys.stderr)
+        if missing:
+            print("Missing packages:", file=sys.stderr)
+            for pkg in missing:
+                print(f"  - {pkg}", file=sys.stderr)
+        if outdated:
+            print("\nOutdated packages:", file=sys.stderr)
+            for pkg in outdated:
+                print(f"  - {pkg}", file=sys.stderr)
+
+        print("\n📦 To fix this, run one of these commands:\n", file=sys.stderr)
+        print("  # Option 1: Install in user directory", file=sys.stderr)
+        print("  pip3 install --user -r requirements.txt\n", file=sys.stderr)
+        print("  # Option 2: Use a virtual environment (recommended)", file=sys.stderr)
+        print("  python3 -m venv venv", file=sys.stderr)
+        print("  source venv/bin/activate", file=sys.stderr)
+        print("  pip3 install -r requirements.txt\n", file=sys.stderr)
+        print("  # Option 3: Upgrade existing packages", file=sys.stderr)
+        print("  pip3 install --user --upgrade -r requirements.txt\n", file=sys.stderr)
+        sys.exit(1)
+
+check_dependencies()
 
 from src.cli import main
 
