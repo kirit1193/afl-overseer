@@ -13,6 +13,7 @@ AFL Monitor has been completely rewritten from the ground up with modern Python 
 
 ### ✨ Major Features
 
+- **🖥️ Interactive TUI** - htop-like interface with live updates, sortable columns, and 3 detail levels
 - **🐍 Modern Python 3.8+** - Type hints, dataclasses, async/await support
 - **🎨 Beautiful Terminal UI** - Rich terminal output with colors, tables, and progress indicators
 - **📊 Interactive HTML Reports** - Responsive, modern web interface with gradient styling
@@ -65,52 +66,74 @@ sudo ln -s $(pwd)/afl-monitor-ng /usr/local/bin/
 ### Dependencies
 
 ```bash
-pip3 install click rich psutil
+pip3 install click rich psutil textual
 ```
 
 ---
 
 ## 🎯 Usage
 
-### Basic Examples
+### Interactive TUI Mode (Default)
 
 ```bash
-# Display status in terminal
-./afl-monitor-ng -c /path/to/sync_dir
+# Launch interactive TUI (like htop) - NO FLAGS NEEDED!
+./afl-monitor-ng /path/to/sync_dir
 
-# Detailed output with per-fuzzer statistics
-./afl-monitor-ng -c -v /path/to/sync_dir
+# Or explicitly request TUI mode
+./afl-monitor-ng -t /path/to/sync_dir
 
+# Interactive controls:
+#   q - Quit
+#   r - Refresh now
+#   1/2/3 - Compact/Normal/Detailed view
+#   n/s/c/e/r - Sort by Name/Speed/Coverage/Execs/Crashes
+#   d - Toggle dead fuzzers
+#   p - Pause/Resume auto-refresh
+```
+
+### Static Terminal Output
+
+```bash
+# One-time static output
+./afl-monitor-ng -s /path/to/sync_dir
+
+# Static with detailed per-fuzzer statistics
+./afl-monitor-ng -s -v /path/to/sync_dir
+
+# Static with auto-refresh (watch mode)
+./afl-monitor-ng -s -w -i 10 /path/to/sync_dir
+```
+
+### File Output Formats
+
+```bash
 # Generate HTML report
 ./afl-monitor-ng -h ./report /path/to/sync_dir
 
 # Export to JSON
 ./afl-monitor-ng -j stats.json /path/to/sync_dir
 
-# Watch mode with 10-second refresh
-./afl-monitor-ng -c -v -w -i 10 /path/to/sync_dir
-
 # Multiple outputs simultaneously
-./afl-monitor-ng -c -v -j stats.json -h ./report /path/to/sync_dir
+./afl-monitor-ng -s -v -j stats.json -h ./report /path/to/sync_dir
 ```
 
 ### Advanced Examples
 
 ```bash
-# Execute notification on new crash
-./afl-monitor-ng -c -e './send_alert.sh' /path/to/sync_dir
+# Execute notification on new crash (in static mode)
+./afl-monitor-ng -s -e './send_alert.sh' /path/to/sync_dir
 
 # Minimal output (summary only)
-./afl-monitor-ng -c -m /path/to/sync_dir
+./afl-monitor-ng -s -m /path/to/sync_dir
 
 # Include dead fuzzers in output
-./afl-monitor-ng -c -d /path/to/sync_dir
+./afl-monitor-ng -s -d /path/to/sync_dir
 
 # No color output (for logs)
-./afl-monitor-ng -c -n /path/to/sync_dir
+./afl-monitor-ng -s -n /path/to/sync_dir
 
 # Watch mode with JSON export
-./afl-monitor-ng -w -i 30 -j /var/www/stats.json /path/to/sync_dir
+./afl-monitor-ng -s -w -i 30 -j /var/www/stats.json /path/to/sync_dir
 ```
 
 ---
@@ -119,18 +142,38 @@ pip3 install click rich psutil
 
 | Option | Description |
 |--------|-------------|
-| `-c`, `--terminal` | Output to terminal (default if no output specified) |
+| `-t`, `--tui` | Interactive TUI mode like htop (default when no output flags) |
+| `-s`, `--static` | Static terminal output (non-interactive) |
 | `-h`, `--html DIR` | Generate HTML report in directory |
 | `-j`, `--json FILE` | Write JSON output to file |
 | `-v`, `--verbose` | Show detailed per-fuzzer statistics |
 | `-n`, `--no-color` | Disable colored output |
-| `-w`, `--watch` | Watch mode - auto-refresh |
-| `-i`, `--interval SEC` | Watch mode refresh interval (default: 5) |
+| `-w`, `--watch` | Watch mode - auto-refresh (for static output) |
+| `-i`, `--interval SEC` | Refresh interval in seconds (default: 5) |
 | `-d`, `--show-dead` | Include dead fuzzers in output |
 | `-m`, `--minimal` | Minimal output mode (summary only) |
 | `-e`, `--execute CMD` | Execute command on new crash (stats passed via stdin) |
 | `--version` | Show version and exit |
 | `--help` | Show help message |
+
+### Interactive TUI Controls
+
+When using the interactive TUI mode (default), you can use these keyboard shortcuts:
+
+| Key | Action |
+|-----|--------|
+| `q` | Quit the application |
+| `r` | Refresh now (force update) |
+| `1` | Compact view (5 columns: Name, Status, Speed, Coverage, Crashes) |
+| `2` | Normal view (8 columns: + Runtime, Execs, Corpus) |
+| `3` | Detailed view (12 columns: + Pending, Stability, Cycle, CPU%) |
+| `n` | Sort by fuzzer Name |
+| `s` | Sort by execution Speed |
+| `c` | Sort by Coverage |
+| `e` | Sort by total Executions |
+| `r` | Sort by cRashes (unique crashes) |
+| `d` | Toggle showing dead fuzzers |
+| `p` | Pause/Resume auto-refresh |
 
 ---
 
@@ -192,6 +235,7 @@ afl-monitor/
 ├── src/
 │   ├── __init__.py          # Package init
 │   ├── cli.py               # Command-line interface
+│   ├── tui.py               # Interactive TUI (htop-like interface)
 │   ├── models.py            # Data models (dataclasses)
 │   ├── parser.py            # Stats and plot data parsers
 │   ├── process.py           # Process detection and monitoring
@@ -206,11 +250,12 @@ afl-monitor/
 
 ### Key Components
 
+- **Interactive TUI**: Textual-based htop-like interface with live updates, sortable tables, and keyboard controls
 - **Models**: Type-safe data structures using Python dataclasses
 - **Parser**: Robust parsing of fuzzer_stats and plot_data files
 - **Process Monitor**: Detects process status, CPU/memory usage, startup detection
 - **Core Monitor**: Aggregates stats, calculates summaries, tracks deltas
-- **Output Formatters**: Modular output system supporting multiple formats
+- **Output Formatters**: Modular output system supporting multiple formats (TUI, terminal, JSON, HTML)
 - **CLI**: Modern click-based interface with async support
 
 ---
