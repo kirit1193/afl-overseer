@@ -64,15 +64,36 @@ Thank you to Paul S. Ziegler for the original afl-monitor which inspired this pr
 - Python 3.8 or higher
 - Linux, macOS, or WSL2 (Windows)
 
-### Quick Install
+### Recommended: Virtual Environment (Avoids Conflicts)
 
 ```bash
 # Clone the repository
 git clone https://github.com/kirit1193/afl-overseer.git
 cd afl-overseer
 
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
 # Install dependencies
 pip3 install -r requirements.txt
+
+# Make executable
+chmod +x afl-overseer
+
+# Run from anywhere using full path or add to PATH
+./afl-overseer /path/to/sync_dir
+```
+
+### Alternative: User Installation (No Virtual Environment)
+
+```bash
+# Clone the repository
+git clone https://github.com/kirit1193/afl-overseer.git
+cd afl-overseer
+
+# Install dependencies in user directory (avoids system conflicts)
+pip3 install --user -r requirements.txt
 
 # Make executable
 chmod +x afl-overseer
@@ -81,10 +102,30 @@ chmod +x afl-overseer
 sudo ln -s $(pwd)/afl-overseer /usr/local/bin/
 ```
 
+### Troubleshooting Dependencies
+
+If you see errors about missing or outdated packages (especially Textual), the tool will automatically show you how to fix it. Common issues:
+
+**Old Textual version from system packages:**
+```bash
+# Upgrade to the correct version
+pip3 install --user --upgrade textual>=0.40.0
+
+# Or use a virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate
+pip3 install -r requirements.txt
+```
+
 ### Dependencies
 
+Required packages (automatically installed from requirements.txt):
 ```bash
-pip3 install click rich psutil textual aiohttp
+click>=8.1.0      # CLI framework
+rich>=13.0.0      # Terminal output
+psutil>=5.9.0     # Process monitoring
+textual>=0.40.0   # Interactive TUI
+aiohttp>=3.8.0    # Web server
 ```
 
 ---
