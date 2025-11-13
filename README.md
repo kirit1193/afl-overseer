@@ -50,7 +50,7 @@ AFL Overseer is a modern monitoring and visualization tool built with Python 3.8
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourrepo/afl-overseer.git
+git clone https://github.com/kirit1193/afl-overseer.git
 cd afl-overseer
 
 # Install dependencies
@@ -483,7 +483,7 @@ Contributions are welcome! Please:
 
 ```bash
 # Clone for development
-git clone https://github.com/yourrepo/afl-overseer.git
+git clone https://github.com/kirit1193/afl-overseer.git
 cd afl-overseer
 
 # Install in development mode
@@ -514,8 +514,8 @@ Original afl-monitor by Paul S. Ziegler, Copyright 2017 Reflare Ltd.
 
 ## 📧 Support
 
-- Issues: [GitHub Issues](https://github.com/yourrepo/afl-overseer/issues)
-- Discussions: [GitHub Discussions](https://github.com/yourrepo/afl-overseer/discussions)
+- Issues: [GitHub Issues](https://github.com/kirit1193/afl-overseer/issues)
+- Discussions: [GitHub Discussions](https://github.com/kirit1193/afl-overseer/discussions)
 
 ---
 
