@@ -2,7 +2,7 @@
 
 **Modern monitoring and visualization tool for AFL/AFL++ fuzzing campaigns**
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
 ---
@@ -36,6 +36,24 @@ AFL Overseer is a modern monitoring and visualization tool built with Python 3.8
 - `slowest_exec_ms`, `execs_since_crash`
 - Per-fuzzer CPU and memory usage
 - Time without finds, comprehensive timing metrics
+
+---
+
+## 🔄 Project History
+
+**AFL Overseer** is a complete modern rewrite of the original [afl-monitor](https://github.com/reflare/afl-monitor) tool by Paul S. Ziegler. This project combines the best features from both **afl-monitor** and **AFLplusplus/afl-whatsup** while adding extensive new capabilities.
+
+The rewrite addresses security issues in the original Python 2.7 codebase (unsafe pickle usage, deprecated modules), adds modern Python 3.8+ features, and introduces three distinct user interfaces (interactive TUI, web dashboard, and static output) that weren't available in the legacy tools.
+
+**Key differences from the original afl-monitor:**
+- Python 3.8+ with type hints (vs Python 2.7)
+- Interactive htop-like TUI and modern web dashboard (vs static output only)
+- Secure implementation without pickle or command injection vulnerabilities
+- Comprehensive AFL++ 4.x field support with 50+ metrics
+- Smart process detection with alive/dead/starting states
+- Real-time resource monitoring (CPU%, memory per fuzzer)
+
+Thank you to Paul S. Ziegler for the original afl-monitor which inspired this project.
 
 ---
 
@@ -497,9 +515,12 @@ python3 -m pytest tests/
 
 ## 📝 License
 
-Copyright 2024. Licensed under the Apache License, Version 2.0.
+Copyright (c) 2024 AFL Overseer Contributors. Licensed under the MIT License.
 
-Original afl-monitor by Paul S. Ziegler, Copyright 2017 Reflare Ltd.
+This project was inspired by and evolved from the original afl-monitor tool:
+- Original afl-monitor: Copyright (c) 2017 Paul S. Ziegler, Reflare Ltd. (Apache License 2.0)
+
+See [LICENSE](LICENSE) for full details.
 
 ---
 
