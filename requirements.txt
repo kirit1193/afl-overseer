@@ -1,0 +1,19 @@
+# AFL Overseer Requirements
+# Python 3.8+
+
+# Core dependencies
+click>=8.1.0              # Modern CLI framework
+rich>=13.0.0              # Beautiful terminal output
+psutil>=5.9.0             # Process and system monitoring
+textual>=0.40.0           # Interactive TUI framework
+aiohttp>=3.8.0            # Async web server for dashboard
+
+# Optional dependencies for advanced features
+# Install with: pip install -r requirements.txt
+
+# For future enhancements (not yet implemented but ready for use)
+# plotly>=5.17.0          # Interactive HTML charts
+# jinja2>=3.1.0           # HTML templating
+# watchdog>=3.0.0         # File system monitoring
+# pyyaml>=6.0             # Config file support
+# requests>=2.31.0        # HTTP notifications
