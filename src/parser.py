@@ -1,5 +1,7 @@
 """Parsers for AFL fuzzer statistics and plot data."""
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
 from typing import List, Dict, Optional

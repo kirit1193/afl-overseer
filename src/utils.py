@@ -1,8 +1,14 @@
 """Utility functions for formatting and calculations."""
 
+from __future__ import annotations
+
+import re
 import time
 from datetime import datetime, timedelta
 from typing import Union
+
+# Compiled regex for stripping ANSI codes (performance optimization)
+_ANSI_ESCAPE_PATTERN = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
 def format_duration(seconds: int) -> str:
@@ -273,9 +279,7 @@ class ColorFormatter:
     @staticmethod
     def strip_colors(text: str) -> str:
         """Remove ANSI color codes from text."""
-        import re
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        return ansi_escape.sub('', text)
+        return _ANSI_ESCAPE_PATTERN.sub('', text)
 
     @staticmethod
     def colorize(text: str, color: str, bold: bool = False) -> str:
