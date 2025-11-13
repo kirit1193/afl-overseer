@@ -29,7 +29,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             box-sizing: border-box;
         }
 
-        :root {
+        :root[data-theme="dark"] {
             --bg-primary: #0f0f0f;
             --bg-secondary: #1a1a1a;
             --bg-tertiary: #252525;
@@ -41,6 +41,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             --warning: #ffaa00;
             --success: #00cc66;
             --border: #333;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        :root[data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f5f5f5;
+            --bg-tertiary: #e0e0e0;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --accent: #00a87e;
+            --accent-hover: #00c494;
+            --danger: #d63031;
+            --warning: #e17055;
+            --success: #00b894;
+            --border: #ddd;
+            --shadow: rgba(0, 0, 0, 0.1);
         }
 
         body {
@@ -49,6 +65,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             color: var(--text-primary);
             font-size: 14px;
             line-height: 1.5;
+            transition: background-color 0.3s, color 0.3s;
         }
 
         .header {
@@ -61,6 +78,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             position: sticky;
             top: 0;
             z-index: 100;
+            box-shadow: 0 2px 8px var(--shadow);
         }
 
         .header h1 {
@@ -88,10 +106,65 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             color: #000;
         }
 
+        .theme-toggle {
+            background: var(--bg-tertiary);
+            border: none;
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .theme-toggle:hover {
+            background: var(--accent);
+            color: #000;
+        }
+
         .container {
             max-width: 1600px;
             margin: 0 auto;
             padding: 20px;
+        }
+
+        .alerts {
+            margin-bottom: 20px;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert.danger {
+            background: rgba(255, 68, 68, 0.15);
+            border-left: 4px solid var(--danger);
+        }
+
+        .alert.warning {
+            background: rgba(255, 170, 0, 0.15);
+            border-left: 4px solid var(--warning);
+        }
+
+        .alert-icon {
+            font-size: 20px;
         }
 
         .tabs {
@@ -145,6 +218,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             padding: 15px;
             border-radius: 8px;
             border: 1px solid var(--border);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .metric-card.warning {
+            border-color: var(--warning);
+            background: rgba(255, 170, 0, 0.05);
+        }
+
+        .metric-card.danger {
+            border-color: var(--danger);
+            background: rgba(255, 68, 68, 0.05);
         }
 
         .metric-label {
@@ -234,6 +323,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: var(--bg-tertiary);
         }
 
+        tr.dead {
+            opacity: 0.6;
+        }
+
+        tr.warning {
+            background: rgba(255, 170, 0, 0.05);
+        }
+
         .status {
             display: inline-block;
             padding: 3px 10px;
@@ -269,6 +366,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             height: 100%;
             background: var(--accent);
             transition: width 0.3s ease;
+        }
+
+        .warning-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 8px;
+            background: var(--warning);
+            color: #000;
         }
 
         @media (max-width: 768px) {
@@ -310,6 +418,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="header">
         <h1>⚡ AFL Monitor Dashboard</h1>
         <div class="header-info">
+            <button class="theme-toggle" onclick="toggleTheme()">🌓 Theme</button>
             <div class="status-badge live">● LIVE</div>
             <div id="lastUpdate">Last update: --:--:--</div>
             <div>Refresh: <span id="refreshInterval">5</span>s</div>
@@ -317,6 +426,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
 
     <div class="container">
+        <div id="alerts" class="alerts"></div>
+
         <div class="tabs">
             <button class="tab active" onclick="switchTab('overview')">Overview</button>
             <button class="tab" onclick="switchTab('fuzzers')">Fuzzers</button>
@@ -326,7 +437,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         <div id="overview" class="tab-content active">
             <div class="metrics-grid">
-                <div class="metric-card">
+                <div class="metric-card" id="aliveFuzzersCard">
                     <div class="metric-label">Active Fuzzers</div>
                     <div class="metric-value" id="aliveFuzzers">0</div>
                     <div class="metric-subvalue">of <span id="totalFuzzers">0</span> total</div>
@@ -371,7 +482,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         <th>Coverage</th>
                         <th>Crashes</th>
                         <th>Corpus</th>
-                        <th>CPU</th>
+                        <th>Stability</th>
                     </tr>
                 </thead>
                 <tbody id="fuzzersTable">
@@ -394,9 +505,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 </div>
             </div>
             <div class="chart-container">
-                <div class="chart-title">Paths Found Over Time</div>
+                <div class="chart-title">Paths & Crashes Over Time</div>
                 <div class="chart-wrapper">
                     <canvas id="pathsChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">Pending Paths Over Time</div>
+                <div class="chart-wrapper">
+                    <canvas id="pendingChart"></canvas>
                 </div>
             </div>
         </div>
@@ -420,9 +537,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="metric-subvalue">Max: <span id="maxCycle">0</span></div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">Stability</div>
+                    <div class="metric-label">Avg Stability</div>
                     <div class="metric-value" id="stability">0%</div>
-                    <div class="metric-subvalue">Average across fuzzers</div>
+                    <div class="metric-subvalue">Range: <span id="stabilityRange">N/A</span></div>
                 </div>
             </div>
         </div>
@@ -433,19 +550,67 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let speedData = [];
         let coverageData = [];
         let pathsData = [];
+        let crashesData = [];
+        let pendingData = [];
         let maxDataPoints = 60;
+
+        // Theme management
+        function toggleTheme() {
+            const root = document.documentElement;
+            const currentTheme = root.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+
+            // Update chart colors
+            updateChartTheme(newTheme);
+        }
+
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+
+        function getComputedColor(variable) {
+            return getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
+        }
+
+        function updateChartTheme(theme) {
+            const borderColor = theme === 'dark' ? '#333' : '#ddd';
+            const textColor = theme === 'dark' ? '#a0a0a0' : '#666';
+
+            [speedChart, coverageChart, pathsChart, pendingChart].forEach(chart => {
+                chart.options.scales.x.grid.color = borderColor;
+                chart.options.scales.y.grid.color = borderColor;
+                chart.options.scales.x.ticks.color = textColor;
+                chart.options.scales.y.ticks.color = textColor;
+                chart.update('none');
+            });
+        }
+
+        loadTheme();
 
         // Initialize charts
         const chartConfig = {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
             plugins: {
-                legend: { display: false }
+                legend: { display: true },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 13 }
+                }
             },
             scales: {
                 x: {
                     grid: { color: '#333' },
-                    ticks: { color: '#a0a0a0' }
+                    ticks: { color: '#a0a0a0', maxTicksLimit: 10 }
                 },
                 y: {
                     grid: { color: '#333' },
@@ -496,6 +661,47 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     borderColor: '#ffaa00',
                     backgroundColor: 'rgba(255, 170, 0, 0.1)',
                     tension: 0.4,
+                    fill: true,
+                    yAxisID: 'y'
+                }, {
+                    label: 'Crashes',
+                    data: [],
+                    borderColor: '#ff4444',
+                    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    yAxisID: 'y1'
+                }]
+            },
+            options: {
+                ...chartConfig,
+                scales: {
+                    x: chartConfig.scales.x,
+                    y: {
+                        ...chartConfig.scales.y,
+                        type: 'linear',
+                        position: 'left'
+                    },
+                    y1: {
+                        ...chartConfig.scales.y,
+                        type: 'linear',
+                        position: 'right',
+                        grid: { drawOnChartArea: false }
+                    }
+                }
+            }
+        });
+
+        const pendingChart = new Chart(document.getElementById('pendingChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Pending Paths',
+                    data: [],
+                    borderColor: '#9b59b6',
+                    backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                    tension: 0.4,
                     fill: true
                 }]
             },
@@ -517,6 +723,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     speedChart.resize();
                     coverageChart.resize();
                     pathsChart.resize();
+                    pendingChart.resize();
                 }, 50);
             }
         }
@@ -537,11 +744,74 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             return `${s}s`;
         }
 
+        function updateAlerts(data) {
+            const alertsDiv = document.getElementById('alerts');
+            const alerts = [];
+
+            const summary = data.summary;
+            const deadCount = summary.total_fuzzers - summary.alive_fuzzers;
+
+            // Dead fuzzers alert
+            if (deadCount > 0) {
+                alerts.push({
+                    type: 'danger',
+                    icon: '⚠️',
+                    message: `${deadCount} fuzzer${deadCount > 1 ? 's' : ''} not responding (dead)`
+                });
+            }
+
+            // Low stability alert
+            data.fuzzers.forEach(f => {
+                if (f.status === 'ALIVE' && f.stability < 80) {
+                    alerts.push({
+                        type: 'warning',
+                        icon: '⚡',
+                        message: `${f.name}: Low stability (${f.stability.toFixed(1)}%)`
+                    });
+                }
+            });
+
+            // High timeout alert
+            data.fuzzers.forEach(f => {
+                if (f.status === 'ALIVE' && f.slowest_exec_ms > 100) {
+                    alerts.push({
+                        type: 'warning',
+                        icon: '🐌',
+                        message: `${f.name}: High execution timeout (${f.slowest_exec_ms}ms)`
+                    });
+                }
+            });
+
+            // Render alerts
+            if (alerts.length > 0) {
+                alertsDiv.innerHTML = alerts.map(alert => `
+                    <div class="alert ${alert.type}">
+                        <span class="alert-icon">${alert.icon}</span>
+                        <div>${alert.message}</div>
+                    </div>
+                `).join('');
+            } else {
+                alertsDiv.innerHTML = '';
+            }
+        }
+
         function updateDashboard(data) {
             const summary = data.summary;
             const system = data.system;
 
+            // Update alerts
+            updateAlerts(data);
+
             // Overview metrics
+            const deadCount = summary.total_fuzzers - summary.alive_fuzzers;
+            const aliveFuzzersCard = document.getElementById('aliveFuzzersCard');
+
+            if (deadCount > 0) {
+                aliveFuzzersCard.classList.add('danger');
+            } else {
+                aliveFuzzersCard.classList.remove('danger');
+            }
+
             document.getElementById('aliveFuzzers').textContent = summary.alive_fuzzers;
             document.getElementById('totalFuzzers').textContent = summary.total_fuzzers;
             document.getElementById('totalExecs').textContent = formatNumber(summary.total_execs);
@@ -564,12 +834,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             document.getElementById('avgCycle').textContent = summary.avg_cycle.toFixed(1);
             document.getElementById('maxCycle').textContent = summary.max_cycle;
             document.getElementById('stability').textContent = summary.avg_stability.toFixed(1) + '%';
+            document.getElementById('stabilityRange').textContent =
+                `${summary.min_stability || 0}% - ${summary.max_stability || 0}%`;
 
             // Fuzzers table
             const tbody = document.getElementById('fuzzersTable');
-            tbody.innerHTML = data.fuzzers.map(f => `
-                <tr>
-                    <td>${f.name}</td>
+            tbody.innerHTML = data.fuzzers.map(f => {
+                const rowClass = f.status === 'DEAD' ? 'dead' : (f.stability < 80 ? 'warning' : '');
+                const warnings = [];
+                if (f.stability < 80) warnings.push(`⚡${f.stability.toFixed(1)}%`);
+                if (f.slowest_exec_ms > 100) warnings.push(`🐌${f.slowest_exec_ms}ms`);
+
+                return `
+                <tr class="${rowClass}">
+                    <td>${f.name}${warnings.length > 0 ? `<span class="warning-badge">${warnings.join(' ')}</span>` : ''}</td>
                     <td><span class="status ${f.status.toLowerCase()}">${f.status}</span></td>
                     <td>${formatTime(f.run_time)}</td>
                     <td>${formatNumber(f.execs_done)}</td>
@@ -577,9 +855,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <td>${f.bitmap_cvg.toFixed(1)}%</td>
                     <td>${f.saved_crashes}</td>
                     <td>${f.corpus_count}</td>
-                    <td>${f.cpu_percent.toFixed(1)}%</td>
+                    <td>${f.stability ? f.stability.toFixed(1) + '%' : 'N/A'}</td>
                 </tr>
-            `).join('');
+            `}).join('');
 
             // Update charts
             const timestamp = new Date().toLocaleTimeString();
@@ -587,12 +865,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 speedData.shift();
                 coverageData.shift();
                 pathsData.shift();
+                crashesData.shift();
+                pendingData.shift();
                 speedChart.data.labels.shift();
             }
 
             speedData.push(summary.current_speed);
             coverageData.push(summary.max_coverage);
             pathsData.push(summary.corpus_count);
+            crashesData.push(summary.total_crashes);
+            pendingData.push(summary.pending_total);
 
             speedChart.data.labels.push(timestamp);
             speedChart.data.datasets[0].data = speedData;
@@ -604,7 +886,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             pathsChart.data.labels = speedChart.data.labels;
             pathsChart.data.datasets[0].data = pathsData;
+            pathsChart.data.datasets[1].data = crashesData;
             pathsChart.update('none');
+
+            pendingChart.data.labels = speedChart.data.labels;
+            pendingChart.data.datasets[0].data = pendingData;
+            pendingChart.update('none');
 
             // Update last update time
             document.getElementById('lastUpdate').textContent = 'Last update: ' + timestamp;
@@ -650,7 +937,7 @@ class WebServer:
             watch_mode=False,
             watch_interval=refresh_interval,
             execute_command=None,
-            show_dead=False,
+            show_dead=True,  # Always include dead fuzzers in API
             minimal=False,
             html_dir=None,
             json_file=None,
@@ -689,14 +976,16 @@ class WebServer:
                 'current_speed': summary.total_speed,
                 'avg_speed': summary.current_avg_speed,
                 'max_coverage': summary.max_coverage,
-                'avg_coverage': summary.max_coverage,  # Using max as avg isn't stored separately
+                'avg_coverage': summary.max_coverage,
                 'total_crashes': summary.total_crashes,
                 'total_hangs': summary.total_hangs,
                 'corpus_count': summary.total_corpus,
-                'corpus_favored': 0,  # Not tracked in summary, would need to calculate
+                'corpus_favored': 0,  # Calculate from all_stats
                 'pending_total': summary.total_pending,
                 'pending_favored': summary.total_pending_favs,
                 'avg_stability': summary.avg_stability,
+                'min_stability': summary.min_stability,
+                'max_stability': summary.max_stability,
                 'avg_cycle': summary.avg_cycle,
                 'max_cycle': summary.max_cycle,
             },
@@ -710,16 +999,19 @@ class WebServer:
             'fuzzers': [
                 {
                     'name': stats.fuzzer_name,
-                    'status': stats.status,
+                    'status': stats.status.value if hasattr(stats.status, 'value') else str(stats.status),
                     'run_time': stats.run_time,
                     'execs_done': stats.execs_done,
-                    'exec_speed': stats.exec_speed,
+                    'exec_speed': stats.execs_per_sec,
                     'bitmap_cvg': stats.bitmap_cvg,
                     'saved_crashes': stats.saved_crashes,
                     'saved_hangs': stats.saved_hangs,
                     'corpus_count': stats.corpus_count,
-                    'cpu_percent': stats.cpu_percent,
-                    'memory_percent': stats.memory_percent,
+                    'stability': stats.stability,
+                    'cpu_percent': stats.cpu_usage,
+                    'memory_percent': stats.memory_usage,
+                    'slowest_exec_ms': stats.slowest_exec_ms,
+                    'exec_timeout': stats.exec_timeout,
                 }
                 for stats in all_stats
             ]
