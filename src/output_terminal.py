@@ -32,7 +32,7 @@ class TerminalOutput:
             return
 
         banner = Text()
-        banner.append("AFL Monitor - Next Generation", style="bold cyan")
+        banner.append("AFL Overseer", style="bold cyan")
         banner.append(" v2.0\n", style="dim")
         console.print(banner)
 

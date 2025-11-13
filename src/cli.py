@@ -41,9 +41,9 @@ def setup_logging(verbose: bool):
 @click.option('--version', is_flag=True, help='Show version and exit')
 def main(**kwargs):
     """
-    AFL Monitor - Next Generation
+    AFL Overseer
 
-    Modern monitoring and reporting tool for AFL/AFL++ fuzzing campaigns.
+    Advanced monitoring and visualization tool for AFL/AFL++ fuzzing campaigns.
 
     FINDINGS_DIRECTORY should point to the AFL sync directory containing
     one or more fuzzer instance subdirectories.
@@ -55,20 +55,20 @@ def main(**kwargs):
 
     \b
       # Interactive TUI (default, like htop)
-      afl-monitor-ng /path/to/sync_dir
-      afl-monitor-ng -t /path/to/sync_dir
+      afl-overseer /path/to/sync_dir
+      afl-overseer -t /path/to/sync_dir
 
     \b
       # Web dashboard with TUI
-      afl-monitor-ng -w /path/to/sync_dir
+      afl-overseer -w /path/to/sync_dir
 
     \b
       # Web dashboard headless (no TUI)
-      afl-monitor-ng -w --headless /path/to/sync_dir
+      afl-overseer -w --headless /path/to/sync_dir
 
     \b
       # Static terminal output (one-time)
-      afl-monitor-ng -s /path/to/sync_dir
+      afl-overseer -s /path/to/sync_dir
 
     \b
       # Interactive TUI controls:
@@ -80,13 +80,13 @@ def main(**kwargs):
       #   p - Pause/Resume
     """
     if kwargs['version']:
-        click.echo("AFL Monitor - Next Generation v2.0")
+        click.echo("AFL Overseer v2.0")
         sys.exit(0)
 
     # Check if findings_directory is provided
     if not kwargs.get('findings_directory'):
         click.echo("Error: Missing argument 'FINDINGS_DIRECTORY'.", err=True)
-        click.echo("Try 'afl-monitor-ng --help' for help.")
+        click.echo("Try 'afl-overseer --help' for help.")
         sys.exit(2)
 
     # Setup

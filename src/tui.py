@@ -1,4 +1,4 @@
-"""Interactive TUI (Text User Interface) for AFL Monitor using Textual."""
+"""Interactive TUI (Text User Interface) for AFL Overseer using Textual."""
 
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Static, TabbedContent, TabPane
@@ -236,7 +236,7 @@ class FuzzersTable(DataTable):
 
 
 class AFLMonitorApp(App):
-    """AFL Monitor Interactive TUI Application."""
+    """AFL Overseer Interactive TUI Application."""
 
     CSS = """
     Screen {
@@ -286,7 +286,7 @@ class AFLMonitorApp(App):
         Binding("p", "pause", "Pause/Resume"),
     ]
 
-    TITLE = "AFL Monitor - Interactive Dashboard"
+    TITLE = "AFL Overseer - Interactive Dashboard"
 
     detail_level = reactive(DetailLevel.NORMAL)
     paused = reactive(False)

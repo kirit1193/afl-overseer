@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AFL Monitor - Next Generation
-Modern monitoring and reporting tool for AFL/AFL++ fuzzing campaigns
+AFL Overseer
+Advanced monitoring and visualization tool for AFL/AFL++ fuzzing campaigns
 
 Copyright 2024. Licensed under the Apache License, Version 2.0.
 """

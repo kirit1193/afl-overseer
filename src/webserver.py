@@ -1,4 +1,4 @@
-"""Web server for AFL Monitor dashboard."""
+"""Web server for AFL Overseer dashboard."""
 
 import asyncio
 import json
@@ -20,7 +20,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AFL Monitor Dashboard</title>
+    <title>AFL Overseer Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * {
@@ -416,7 +416,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
     <div class="header">
-        <h1>⚡ AFL Monitor Dashboard</h1>
+        <h1>⚡ AFL Overseer Dashboard</h1>
         <div class="header-info">
             <button class="theme-toggle" onclick="toggleTheme()">🌓 Theme</button>
             <div class="status-badge live">● LIVE</div>
@@ -920,7 +920,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
 class WebServer:
-    """Web server for AFL Monitor dashboard."""
+    """Web server for AFL Overseer dashboard."""
 
     def __init__(self, findings_dir: Path, refresh_interval: int = 5):
         self.findings_dir = findings_dir
@@ -1057,7 +1057,7 @@ async def run_web_server(
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-    print(f"\n🌐 AFL Monitor Dashboard")
+    print(f"\n🌐 AFL Overseer Dashboard")
     print(f"   Local:    http://localhost:{port}")
     print(f"   Network:  http://0.0.0.0:{port}")
     print(f"   Mode:     {'Headless' if headless else 'With TUI'}")
