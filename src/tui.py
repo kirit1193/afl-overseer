@@ -46,8 +46,13 @@ class SummaryPanel(Static):
             return "[dim]Loading...[/dim]"
 
         s = self.summary_data
-        output = []
+        sys_info = self.system_info if self.system_info else {}
 
+        # Build two columns: main stats on left, system info on right
+        left_col = []
+        right_col = []
+
+        # LEFT COLUMN - Fuzzing stats
         # Status line - use dim grey for labels, subtle colors for values
         alive_color = "#5fd75f" if s.alive_fuzzers > 0 else "#d75f5f"  # Muted green/red
         status = f"[{alive_color}]{s.alive_fuzzers}[/{alive_color}]/{s.total_fuzzers}"
@@ -55,20 +60,20 @@ class SummaryPanel(Static):
             status += f" [#af5f5f]({s.dead_fuzzers} dead)[/#af5f5f]"
         if s.starting_fuzzers > 0:
             status += f" [#d7af5f]({s.starting_fuzzers} starting)[/#d7af5f]"
-        output.append(f"[#808080]fuzzers:[/#808080] {status}")
+        left_col.append(f"[#808080]fuzzers:[/#808080] {status}")
 
         # Total runtime (cumulative across all fuzzers)
         if s.total_runtime > 0:
-            output.append(f"[#808080] runtime:[/#808080] {format_duration(s.total_runtime)}")
+            left_col.append(f"[#808080] runtime:[/#808080] {format_duration(s.total_runtime)}")
 
         # Execution stats
-        output.append(f"[#808080]   execs:[/#808080] {format_number(s.total_execs)}")
+        left_col.append(f"[#808080]   execs:[/#808080] {format_number(s.total_execs)}")
         if s.alive_fuzzers > 0:
-            output.append(f"[#808080]   speed:[/#808080] {format_speed(s.total_speed)} [dim]({format_speed(s.avg_speed_per_core)}/core)[/dim]")
+            left_col.append(f"[#808080]   speed:[/#808080] {format_speed(s.total_speed)} [dim]({format_speed(s.avg_speed_per_core)}/core)[/dim]")
 
         # Coverage - subtle yellow/orange for low coverage
         cov_color = "#5fd75f" if s.max_coverage > 10 else "#d7af5f" if s.max_coverage > 5 else "#af5f5f"
-        output.append(f"[#808080]coverage:[/#808080] [{cov_color}]{format_percent(s.max_coverage)}[/{cov_color}]")
+        left_col.append(f"[#808080]coverage:[/#808080] [{cov_color}]{format_percent(s.max_coverage)}[/{cov_color}]")
 
         # Crashes and Hangs
         crash_color = "#d75f5f" if s.total_crashes > 0 else "#4e4e4e"
@@ -81,15 +86,15 @@ class SummaryPanel(Static):
         if s.new_hangs > 0:
             hang_text += f" [#ff875f](+{s.new_hangs}!)[/#ff875f]"
 
-        output.append(f"[#808080] crashes:[/#808080] {crash_text}  [#808080]hangs:[/#808080] {hang_text}")
+        left_col.append(f"[#808080] crashes:[/#808080] {crash_text}  [#808080]hangs:[/#808080] {hang_text}")
 
         # Corpus stats - pending paths
-        output.append(f"[#808080]  corpus:[/#808080] {format_number(s.total_corpus)}  [#808080]pending:[/#808080] {s.total_pending} [dim]({s.total_pending_favs} favs)[/dim]")
+        left_col.append(f"[#808080]  corpus:[/#808080] {format_number(s.total_corpus)}  [#808080]pending:[/#808080] {s.total_pending} [dim]({s.total_pending_favs} favs)[/dim]")
 
-        # Last activity
-        output.append(f"[#808080]   finds:[/#808080] {format_time_ago(s.last_find_time)}")
+        # Last activity (latest find across all fuzzers)
+        left_col.append(f"[#808080]   finds:[/#808080] {format_time_ago(s.last_find_time)}")
 
-        # Cycles without finds indicator
+        # Cycles without finds indicator - show per fuzzer
         if s.cycles_wo_finds and s.cycles_wo_finds != "N/A":
             cwof_display = s.cycles_wo_finds
             # Parse to determine color - look for highest value
@@ -99,7 +104,26 @@ class SummaryPanel(Static):
                 cwof_color = "#d75f5f" if max_cwof > 50 else "#d7af5f" if max_cwof > 10 else "#808080"
             except:
                 cwof_color = "#808080"
-            output.append(f"[#808080] no finds:[/#808080] [{cwof_color}]{cwof_display}[/{cwof_color}] cycles")
+            left_col.append(f"[#808080] no finds:[/#808080] [{cwof_color}]{cwof_display}[/{cwof_color}] cycles")
+
+        # RIGHT COLUMN - System info
+        if sys_info:
+            right_col.append(f"[#808080]System Resources[/#808080]")
+            right_col.append(f"[#808080]CPU:[/#808080] {sys_info.get('cpu_percent', 0):.1f}% [dim]({sys_info.get('cpu_count', 0)} cores)[/dim]")
+            right_col.append(f"[#808080]Mem:[/#808080] {sys_info.get('memory_used_gb', 0):.1f}/{sys_info.get('memory_total_gb', 0):.1f} GB [dim]({sys_info.get('memory_percent', 0):.1f}%)[/dim]")
+            right_col.append(f"[#808080]Disk:[/#808080] {sys_info.get('disk_used_gb', 0):.0f}/{sys_info.get('disk_total_gb', 0):.0f} GB [dim]({sys_info.get('disk_percent', 0):.1f}%)[/dim]")
+
+        # Combine columns side by side
+        output = []
+        max_lines = max(len(left_col), len(right_col))
+        for i in range(max_lines):
+            left = left_col[i] if i < len(left_col) else ""
+            right = right_col[i] if i < len(right_col) else ""
+            # Pad left column to align right column
+            if right:
+                output.append(f"{left:<60}  {right}")
+            else:
+                output.append(left)
 
         return "\n".join(output)
 
@@ -136,35 +160,22 @@ class FuzzersTable(DataTable):
             self.add_column("Name", key="name")
             self.add_column("St", key="status")  # Abbreviated
             self.add_column("Speed", key="speed")
-            self.add_column("Cov%", key="coverage")
             self.add_column("Crashes", key="crashes")
         elif self.detail_level == DetailLevel.NORMAL:
             # Normal: Core metrics without clutter
             self.add_column("Name", key="name")
             self.add_column("Status", key="status")
-            self.add_column("Execs", key="execs")
             self.add_column("Speed", key="speed")
-            self.add_column("Corpus", key="corpus")
             self.add_column("Pending", key="pending")
-            self.add_column("Coverage", key="coverage")
-            self.add_column("Last Find", key="last_find")
-            self.add_column("Cycles w/o", key="cycles_wo")
             self.add_column("Crash/Hang", key="findings")
         else:  # DETAILED
             # Detailed: All available metrics
             self.add_column("Name", key="name")
             self.add_column("Status", key="status")
-            self.add_column("Execs", key="execs")
             self.add_column("Speed", key="speed")
-            self.add_column("Corpus", key="corpus")
             self.add_column("Pending", key="pending")
-            self.add_column("Coverage", key="coverage")
-            self.add_column("Last Find", key="last_find")
-            self.add_column("Cycles w/o", key="cycles_wo")
             self.add_column("Stabil", key="stability")
-            self.add_column("Cycle", key="cycle")
             self.add_column("Crash/Hang", key="findings")
-            self.add_column("CPU%", key="cpu")
             self.add_column("Tmout", key="timeout")
 
     def update_data(self, fuzzers):
@@ -213,53 +224,24 @@ class FuzzersTable(DataTable):
                     Text(fuzzer.fuzzer_name, style="#a8a8a8"),
                     status_compact,
                     Text(format_speed(fuzzer.execs_per_sec) if fuzzer.is_alive else "-", style="#808080"),
-                    Text(format_percent(fuzzer.bitmap_cvg, 1), style="#808080"),
                     Text(str(fuzzer.saved_crashes), style="#af5f5f" if fuzzer.saved_crashes > 0 else "#4e4e4e"),
                 )
             elif self.detail_level == DetailLevel.NORMAL:
-                # Format last find time
-                last_find_str = format_time_ago(fuzzer.last_find) if fuzzer.last_find > 0 else "never"
-
-                # Format cycles without finds with color
-                cwof = fuzzer.cycles_wo_finds
-                cwof_color = "#d75f5f" if cwof > 50 else "#d7af5f" if cwof > 10 else "#808080"
-                cwof_text = Text(str(cwof) if cwof >= 0 else "-", style=cwof_color)
-
                 self.add_row(
                     Text(fuzzer.fuzzer_name, style="#a8a8a8"),
                     status_full,
-                    Text(format_number(fuzzer.execs_done), style="#808080"),
                     Text(format_speed(fuzzer.execs_per_sec) if fuzzer.is_alive else "-", style="#808080"),
-                    Text(f"{fuzzer.cur_item}/{fuzzer.corpus_count}", style="#808080"),
                     Text(f"{fuzzer.pending_favs}/{fuzzer.pending_total}", style="#808080"),
-                    Text(format_percent(fuzzer.bitmap_cvg, 1), style="#808080"),
-                    Text(last_find_str, style="#808080"),
-                    cwof_text,
                     Text(findings, style="#af5f5f" if (fuzzer.saved_crashes + fuzzer.saved_hangs) > 0 else "#4e4e4e"),
                 )
             else:  # DETAILED
-                # Format last find time
-                last_find_str = format_time_ago(fuzzer.last_find) if fuzzer.last_find > 0 else "never"
-
-                # Format cycles without finds with color
-                cwof = fuzzer.cycles_wo_finds
-                cwof_color = "#d75f5f" if cwof > 50 else "#d7af5f" if cwof > 10 else "#808080"
-                cwof_text = Text(str(cwof) if cwof >= 0 else "-", style=cwof_color)
-
                 self.add_row(
                     Text(fuzzer.fuzzer_name, style="#a8a8a8"),
                     status_full,
-                    Text(format_number(fuzzer.execs_done), style="#808080"),
                     Text(format_speed(fuzzer.execs_per_sec) if fuzzer.is_alive else "-", style="#808080"),
-                    Text(f"{fuzzer.cur_item}/{fuzzer.corpus_count}", style="#808080"),
                     Text(f"{fuzzer.pending_favs}/{fuzzer.pending_total}", style="#808080"),
-                    Text(format_percent(fuzzer.bitmap_cvg, 1), style="#808080"),
-                    Text(last_find_str, style="#808080"),
-                    cwof_text,
                     Text(format_percent(fuzzer.stability, 0), style="#808080"),
-                    Text(str(fuzzer.cycles_done), style="#808080"),
                     Text(findings, style="#af5f5f" if (fuzzer.saved_crashes + fuzzer.saved_hangs) > 0 else "#4e4e4e"),
-                    Text(f"{fuzzer.cpu_usage:.1f}" if fuzzer.cpu_usage >= 0 else "-", style="#808080"),
                     Text(str(fuzzer.total_tmout), style="#d7875f" if fuzzer.total_tmout > 100 else "#808080"),
                 )
 
@@ -295,7 +277,7 @@ class FuzzersTable(DataTable):
 
 
 class GraphPanel(Static):
-    """Panel for displaying sparkline graphs from plot data."""
+    """Panel for displaying campaign trend sparkline graphs."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -309,19 +291,19 @@ class GraphPanel(Static):
         self.refresh()
 
     def render(self) -> str:
-        """Render sparkline graphs."""
+        """Render campaign trend sparkline graphs."""
         if not self.fuzzer_data or not self.monitor:
             return "[dim]Loading graphs...[/dim]"
 
         output = []
-        output.append("[bold #808080]Historical Trends (from plot_data)[/bold #808080]\n")
+        output.append("\n[bold #808080]Campaign Trends[/bold #808080]\n")
 
         # Aggregate data from all fuzzers
         all_speeds = []
         all_coverage = []
         all_pending = []
 
-        for fuzzer in self.fuzzer_data[:3]:  # Limit to first 3 fuzzers to avoid clutter
+        for fuzzer in self.fuzzer_data:
             try:
                 plot_data = self.monitor.get_fuzzer_plot_data(fuzzer.directory, max_points=50)
                 if plot_data:
@@ -329,39 +311,6 @@ class GraphPanel(Static):
                     speeds = [p.execs_per_sec for p in plot_data if p.execs_per_sec > 0]
                     coverage = [p.map_size for p in plot_data if p.map_size > 0]
                     pending = [p.pending_total for p in plot_data]
-
-                    if speeds:
-                        sparkline = generate_sparkline(speeds, width=50)
-                        min_speed = min(speeds)
-                        max_speed = max(speeds)
-                        latest_speed = speeds[-1]
-                        output.append(
-                            f"[#808080]{fuzzer.fuzzer_name[:12]:<12} speed:[/#808080] "
-                            f"[#5fd75f]{sparkline}[/#5fd75f]  "
-                            f"[dim][{min_speed:.0f}..{max_speed:.0f}] now: {latest_speed:.0f} ex/s[/dim]"
-                        )
-
-                    if coverage:
-                        sparkline = generate_sparkline(coverage, width=50)
-                        min_cov = min(coverage)
-                        max_cov = max(coverage)
-                        latest_cov = coverage[-1]
-                        output.append(
-                            f"[#808080]{fuzzer.fuzzer_name[:12]:<12} coverage:[/#808080] "
-                            f"[#d7af5f]{sparkline}[/#d7af5f]  "
-                            f"[dim][{min_cov:.1f}%..{max_cov:.1f}%] now: {latest_cov:.1f}%[/dim]"
-                        )
-
-                    if pending:
-                        sparkline = generate_sparkline(pending, width=50)
-                        min_pend = min(pending)
-                        max_pend = max(pending)
-                        latest_pend = pending[-1]
-                        output.append(
-                            f"[#808080]{fuzzer.fuzzer_name[:12]:<12} pending:[/#808080] "
-                            f"[#af5f5f]{sparkline}[/#af5f5f]  "
-                            f"[dim][{min_pend}..{max_pend}] now: {latest_pend}[/dim]\n"
-                        )
 
                     # Collect for aggregate
                     if speeds:
@@ -375,35 +324,44 @@ class GraphPanel(Static):
                 # Skip fuzzers with no plot data
                 continue
 
-        # Show aggregate trends if we have data from multiple fuzzers
-        if len(self.fuzzer_data) > 1 and all_speeds:
-            output.append("[bold #808080]Campaign Trends:[/bold #808080]")
+        # Show aggregate campaign trends
+        if all_speeds:
+            # Sample to get trend over time
+            sample_size = min(len(all_speeds), 60)
+            step = max(1, len(all_speeds) // sample_size)
+            sampled = all_speeds[::step][:60]
 
-            if all_speeds:
-                # Sample to get trend over time
-                sample_size = min(len(all_speeds), 50)
-                step = max(1, len(all_speeds) // sample_size)
-                sampled = all_speeds[::step][:50]
+            sparkline = generate_sparkline(sampled, width=60)
+            output.append(
+                f"  [#808080]Execution speed:[/#808080]  [#5fd75f]{sparkline}[/#5fd75f]  "
+                f"[dim]avg: {sum(sampled)/len(sampled):.0f} ex/s[/dim]\n"
+            )
 
-                sparkline = generate_sparkline(sampled, width=50)
-                output.append(
-                    f"[#808080]Overall speed:[/#808080] [#5fd75f]{sparkline}[/#5fd75f]  "
-                    f"[dim]avg: {sum(sampled)/len(sampled):.0f} ex/s[/dim]"
-                )
+        if all_coverage:
+            sample_size = min(len(all_coverage), 60)
+            step = max(1, len(all_coverage) // sample_size)
+            sampled = all_coverage[::step][:60]
 
-            if all_coverage:
-                sample_size = min(len(all_coverage), 50)
-                step = max(1, len(all_coverage) // sample_size)
-                sampled = all_coverage[::step][:50]
+            sparkline = generate_sparkline(sampled, width=60)
+            output.append(
+                f"  [#808080]Code coverage:  [/#808080]  [#d7af5f]{sparkline}[/#d7af5f]  "
+                f"[dim]avg: {sum(sampled)/len(sampled):.1f}%[/dim]\n"
+            )
 
-                sparkline = generate_sparkline(sampled, width=50)
-                output.append(
-                    f"[#808080]Overall coverage:[/#808080] [#d7af5f]{sparkline}[/#d7af5f]  "
-                    f"[dim]avg: {sum(sampled)/len(sampled):.1f}%[/dim]"
-                )
+        if all_pending:
+            sample_size = min(len(all_pending), 60)
+            step = max(1, len(all_pending) // sample_size)
+            sampled = all_pending[::step][:60]
+
+            sparkline = generate_sparkline(sampled, width=60)
+            avg_pending = sum(sampled) / len(sampled)
+            output.append(
+                f"  [#808080]Pending paths:  [/#808080]  [#af5f5f]{sparkline}[/#af5f5f]  "
+                f"[dim]avg: {avg_pending:.0f}[/dim]\n"
+            )
 
         if len(output) == 1:  # Only header
-            output.append("[dim]No plot_data available. Graphs will appear after fuzzers run for a while.[/dim]")
+            output.append("[dim]No plot_data available. Graphs will appear after fuzzers generate data.[/dim]\n")
 
         return "\n".join(output)
 
@@ -512,18 +470,9 @@ class AFLMonitorApp(App):
         """Compose the UI."""
         yield Header()
         yield SummaryPanel(id="summary")
-
-        with TabbedContent(id="tabs"):
-            with TabPane("Fuzzers", id="fuzzers-tab"):
-                yield Static("Detail Level: Normal | Sort: Name", classes="detail-info", id="detail-info")
-                yield FuzzersTable(detail_level=self.detail_level, id="fuzzers-table")
-
-            with TabPane("Graphs", id="graphs-tab"):
-                yield GraphPanel(id="graphs-panel")
-
-            with TabPane("System", id="system-tab"):
-                yield Static("System information", id="system-info")
-
+        yield Static("Detail Level: Normal | Sort: Name", classes="detail-info", id="detail-info")
+        yield FuzzersTable(detail_level=self.detail_level, id="fuzzers-table")
+        yield GraphPanel(id="graphs-panel")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -555,20 +504,17 @@ class AFLMonitorApp(App):
             except Exception as e:
                 self.notify(f"Failed to update table: {e}", severity="error")
 
-            # Update graphs panel
+            # Update graphs panel (only visible in detailed view)
             try:
                 graphs = self.query_one("#graphs-panel", GraphPanel)
-                graphs.update_graphs(all_stats, self.monitor)
+                if self.detail_level == DetailLevel.DETAILED:
+                    graphs.update_graphs(all_stats, self.monitor)
+                    graphs.styles.display = "block"
+                else:
+                    graphs.styles.display = "none"
             except Exception as e:
                 # Non-critical, graphs may not be visible
                 pass
-
-            # Update system info
-            try:
-                system_text = self._format_system_info(system_info)
-                self.query_one("#system-info", Static).update(system_text)
-            except Exception as e:
-                self.notify(f"Failed to update system info: {e}", severity="warning")
 
             # Update detail info
             try:
@@ -588,19 +534,6 @@ class AFLMonitorApp(App):
 
         except Exception as e:
             self.notify(f"Error refreshing data: {e}", severity="error")
-
-    def _format_system_info(self, system_info: dict) -> str:
-        """Format system information."""
-        if not system_info:
-            return "[dim]No system information available[/dim]"
-
-        lines = [
-            "[bold cyan]System Resources[/bold cyan]\n",
-            f"[bold]CPU:[/bold] {system_info.get('cpu_percent', 0):.1f}% ({system_info.get('cpu_count', 0)} cores)",
-            f"[bold]Memory:[/bold] {system_info.get('memory_used_gb', 0):.1f} / {system_info.get('memory_total_gb', 0):.1f} GB ({system_info.get('memory_percent', 0):.1f}%)",
-            f"[bold]Disk:[/bold] {system_info.get('disk_used_gb', 0):.1f} / {system_info.get('disk_total_gb', 0):.1f} GB ({system_info.get('disk_percent', 0):.1f}%)",
-        ]
-        return "\n".join(lines)
 
     def action_refresh(self) -> None:
         """Manually refresh data."""
