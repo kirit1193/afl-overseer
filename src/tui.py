@@ -113,25 +113,36 @@ class SummaryPanel(Static):
         # RIGHT COLUMN - System info (right-aligned)
         if sys_info:
             right_col.append(f"[bold #808080]System[/bold #808080]")
-            # Use icons: ⚙ for CPU, ▪ for memory, ▪ for disk
-            right_col.append(f"[#5f8787]⚙[/#5f8787] {sys_info.get('cpu_percent', 0):.1f}% [dim]({sys_info.get('cpu_count', 0)} cores)[/dim]")
-            right_col.append(f"[#875f87]▪[/#875f87] {sys_info.get('memory_used_gb', 0):.1f}/{sys_info.get('memory_total_gb', 0):.1f} GB [dim]({sys_info.get('memory_percent', 0):.1f}%)[/dim]")
-            right_col.append(f"[#5f875f]▪[/#5f875f] {sys_info.get('disk_used_gb', 0):.0f}/{sys_info.get('disk_total_gb', 0):.0f} GB [dim]({sys_info.get('disk_percent', 0):.1f}%)[/dim]")
+            # Use text labels instead of icons for better compatibility
+            right_col.append(f"[#5f8787]CPU:[/#5f8787] {sys_info.get('cpu_percent', 0):.1f}% [dim]({sys_info.get('cpu_count', 0)} cores)[/dim]")
+            right_col.append(f"[#875f87]RAM:[/#875f87] {sys_info.get('memory_used_gb', 0):.1f}/{sys_info.get('memory_total_gb', 0):.1f} GB [dim]({sys_info.get('memory_percent', 0):.1f}%)[/dim]")
+            right_col.append(f"[#5f875f]DSK:[/#5f875f] {sys_info.get('disk_used_gb', 0):.0f}/{sys_info.get('disk_total_gb', 0):.0f} GB [dim]({sys_info.get('disk_percent', 0):.1f}%)[/dim]")
 
-        # Combine columns side by side with right-aligned right column
+        # Combine columns side by side with proper alignment
+        # Use Rich's Text object to properly handle markup and measure width
+        from rich.text import Text as RichText
         output = []
         max_lines = max(len(left_col), len(right_col))
+
         for i in range(max_lines):
             left = left_col[i] if i < len(left_col) else ""
             right = right_col[i] if i < len(right_col) else ""
-            # Right-align the right column at position 62
+
             if right:
-                # Strip markup for length calculation
-                from rich.console import Console
-                from rich.text import Text as RichText
-                console = Console()
-                # Simple approach: pad left to 50 chars visible width
-                output.append(f"{left:<50}  {right:>26}")
+                # Create Text objects to measure actual rendered width
+                left_text = RichText.from_markup(left)
+                right_text = RichText.from_markup(right)
+
+                # Calculate padding needed (assume 80 char width, right column at ~50)
+                left_width = len(left_text.plain)
+                right_width = len(right_text.plain)
+                target_right_pos = 50
+
+                if left_width < target_right_pos:
+                    padding = " " * (target_right_pos - left_width)
+                    output.append(f"{left}{padding}{right}")
+                else:
+                    output.append(f"{left}  {right}")
             else:
                 output.append(left)
 
@@ -141,13 +152,8 @@ class SummaryPanel(Static):
 class FuzzersTable(DataTable):
     """Interactive table for fuzzer instances."""
 
-    BINDINGS = [
-        Binding("n", "sort_name", "Sort by Name"),
-        Binding("s", "sort_speed", "Sort by Speed"),
-        Binding("c", "sort_coverage", "Sort by Coverage"),
-        Binding("e", "sort_execs", "Sort by Execs"),
-        Binding("r", "sort_crashes", "Sort by Crashes"),
-    ]
+    # Sort bindings removed - users can click column headers to sort
+    BINDINGS = []
 
     def __init__(self, detail_level: str = DetailLevel.NORMAL, **kwargs):
         super().__init__(**kwargs)

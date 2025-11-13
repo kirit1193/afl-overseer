@@ -237,7 +237,7 @@ class TerminalOutput:
         if warnings:
             console.print()
             for warning in warnings:
-                console.print(f"  [yellow]⚠[/yellow]  {warning}")
+                console.print(f"  [yellow]![/yellow]  {warning}")
 
         console.print()
 
