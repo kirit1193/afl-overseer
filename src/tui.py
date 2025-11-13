@@ -48,33 +48,43 @@ class SummaryPanel(Static):
         s = self.summary_data
         output = []
 
-        # Status line
-        alive_color = "green" if s.alive_fuzzers > 0 else "red"
-        status = f"[bold {alive_color}]{s.alive_fuzzers} alive[/bold {alive_color}] / {s.total_fuzzers} total"
+        # Status line - use dim grey for labels, subtle colors for values
+        alive_color = "#5fd75f" if s.alive_fuzzers > 0 else "#d75f5f"  # Muted green/red
+        status = f"[{alive_color}]{s.alive_fuzzers}[/{alive_color}]/{s.total_fuzzers}"
         if s.dead_fuzzers > 0:
-            status += f" ([red]{s.dead_fuzzers} dead[/red])"
+            status += f" [#af5f5f]({s.dead_fuzzers} dead)[/#af5f5f]"
         if s.starting_fuzzers > 0:
-            status += f" ([yellow]{s.starting_fuzzers} starting[/yellow])"
-        output.append(f"[bold cyan]Fuzzers:[/bold cyan] {status}")
+            status += f" [#d7af5f]({s.starting_fuzzers} starting)[/#d7af5f]"
+        output.append(f"[#808080]fuzzers:[/#808080] {status}")
+
+        # Total runtime (cumulative across all fuzzers)
+        if s.total_runtime > 0:
+            output.append(f"[#808080] runtime:[/#808080] {format_duration(s.total_runtime)}")
 
         # Execution stats
-        output.append(f"[bold cyan]Executions:[/bold cyan] {format_number(s.total_execs)}")
+        output.append(f"[#808080]   execs:[/#808080] {format_number(s.total_execs)}")
         if s.alive_fuzzers > 0:
-            output.append(f"[bold cyan]Speed:[/bold cyan] {format_speed(s.total_speed)} (avg: {format_speed(s.avg_speed_per_core)}/core)")
+            output.append(f"[#808080]   speed:[/#808080] {format_speed(s.total_speed)} [dim]({format_speed(s.avg_speed_per_core)}/core)[/dim]")
 
-        # Coverage
-        cov_color = "green" if s.max_coverage > 10 else "yellow" if s.max_coverage > 5 else "red"
-        output.append(f"[bold cyan]Coverage:[/bold cyan] [{cov_color}]{format_percent(s.max_coverage)}[/{cov_color}]")
+        # Coverage - subtle yellow/orange for low coverage
+        cov_color = "#5fd75f" if s.max_coverage > 10 else "#d7af5f" if s.max_coverage > 5 else "#af5f5f"
+        output.append(f"[#808080]coverage:[/#808080] [{cov_color}]{format_percent(s.max_coverage)}[/{cov_color}]")
 
-        # Crashes
-        crash_color = "bold red" if s.total_crashes > 0 else "dim"
+        # Crashes and Hangs
+        crash_color = "#d75f5f" if s.total_crashes > 0 else "#4e4e4e"
         crash_text = f"[{crash_color}]{s.total_crashes}[/{crash_color}]"
         if s.new_crashes > 0:
-            crash_text += f" [bold red](+{s.new_crashes} NEW!)[/bold red]"
-        output.append(f"[bold cyan]Crashes:[/bold cyan] {crash_text}")
+            crash_text += f" [#ff5f5f](+{s.new_crashes}!)[/#ff5f5f]"
+
+        hang_color = "#d7875f" if s.total_hangs > 0 else "#4e4e4e"
+        hang_text = f"[{hang_color}]{s.total_hangs}[/{hang_color}]"
+        if s.new_hangs > 0:
+            hang_text += f" [#ff875f](+{s.new_hangs}!)[/#ff875f]"
+
+        output.append(f"[#808080] crashes:[/#808080] {crash_text}  [#808080]hangs:[/#808080] {hang_text}")
 
         # Last activity
-        output.append(f"[bold cyan]Last Find:[/bold cyan] {format_time_ago(s.last_find_time)}")
+        output.append(f"[#808080]   finds:[/#808080] {format_time_ago(s.last_find_time)}")
 
         return "\n".join(output)
 
@@ -107,33 +117,35 @@ class FuzzersTable(DataTable):
         self.clear(columns=True)
 
         if self.detail_level == DetailLevel.COMPACT:
+            # Compact: Essential info only
             self.add_column("Name", key="name")
-            self.add_column("Status", key="status")
+            self.add_column("St", key="status")  # Abbreviated
             self.add_column("Speed", key="speed")
-            self.add_column("Coverage", key="coverage")
+            self.add_column("Cov%", key="coverage")
             self.add_column("Crashes", key="crashes")
         elif self.detail_level == DetailLevel.NORMAL:
+            # Normal: Core metrics without clutter
             self.add_column("Name", key="name")
             self.add_column("Status", key="status")
-            self.add_column("Runtime", key="runtime")
             self.add_column("Execs", key="execs")
             self.add_column("Speed", key="speed")
             self.add_column("Corpus", key="corpus")
             self.add_column("Coverage", key="coverage")
-            self.add_column("Crashes", key="crashes")
+            self.add_column("Crash/Hang", key="findings")
         else:  # DETAILED
+            # Detailed: All available metrics
             self.add_column("Name", key="name")
             self.add_column("Status", key="status")
-            self.add_column("Runtime", key="runtime")
             self.add_column("Execs", key="execs")
             self.add_column("Speed", key="speed")
             self.add_column("Corpus", key="corpus")
             self.add_column("Pending", key="pending")
             self.add_column("Coverage", key="coverage")
-            self.add_column("Stability", key="stability")
+            self.add_column("Stabil", key="stability")
             self.add_column("Cycle", key="cycle")
-            self.add_column("Crashes", key="crashes")
+            self.add_column("Crash/Hang", key="findings")
             self.add_column("CPU%", key="cpu")
+            self.add_column("Tmout", key="timeout")
 
     def update_data(self, fuzzers):
         """Update table with fuzzer data."""
@@ -155,53 +167,59 @@ class FuzzersTable(DataTable):
             self.fuzzer_data.sort(key=lambda f: f.saved_crashes, reverse=not self.sort_reverse)
 
     def _populate_table(self):
-        """Populate table with sorted data."""
+        """Populate table with sorted data using muted AFL-style colors."""
         self.clear()
 
         for fuzzer in self.fuzzer_data:
-            # Status with color
+            # Status with muted colors - just colored dot, no bold text
             if fuzzer.status.value == "alive":
-                status = Text("●", style="bold green") + Text(" ALIVE")
+                status_compact = Text("▪", style="#5fd75f")  # Muted green dot
+                status_full = Text("▪", style="#5fd75f") + Text(" alive", style="#808080")
             elif fuzzer.status.value == "dead":
-                status = Text("●", style="bold red") + Text(" DEAD")
+                status_compact = Text("▪", style="#d75f5f")  # Muted red dot
+                status_full = Text("▪", style="#d75f5f") + Text(" dead", style="#808080")
             elif fuzzer.status.value == "starting":
-                status = Text("●", style="bold yellow") + Text(" START")
+                status_compact = Text("▪", style="#d7af5f")  # Muted yellow dot
+                status_full = Text("▪", style="#d7af5f") + Text(" start", style="#808080")
             else:
-                status = Text("●", style="dim") + Text(" UNKN")
+                status_compact = Text("▪", style="#4e4e4e")  # Dark grey dot
+                status_full = Text("▪", style="#4e4e4e") + Text(" unkn", style="#4e4e4e")
+
+            # Format findings (crashes/hangs) for compact display
+            findings = f"{fuzzer.saved_crashes}/{fuzzer.saved_hangs}"
 
             if self.detail_level == DetailLevel.COMPACT:
                 self.add_row(
-                    fuzzer.fuzzer_name,
-                    status,
-                    format_speed(fuzzer.execs_per_sec) if fuzzer.is_alive else "-",
-                    format_percent(fuzzer.bitmap_cvg, 1),
-                    str(fuzzer.saved_crashes),
+                    Text(fuzzer.fuzzer_name, style="#a8a8a8"),
+                    status_compact,
+                    Text(format_speed(fuzzer.execs_per_sec) if fuzzer.is_alive else "-", style="#808080"),
+                    Text(format_percent(fuzzer.bitmap_cvg, 1), style="#808080"),
+                    Text(str(fuzzer.saved_crashes), style="#af5f5f" if fuzzer.saved_crashes > 0 else "#4e4e4e"),
                 )
             elif self.detail_level == DetailLevel.NORMAL:
                 self.add_row(
-                    fuzzer.fuzzer_name,
-                    status,
-                    format_duration(fuzzer.run_time),
-                    format_number(fuzzer.execs_done),
-                    format_speed(fuzzer.execs_per_sec) if fuzzer.is_alive else "-",
-                    f"{fuzzer.cur_item}/{fuzzer.corpus_count}",
-                    format_percent(fuzzer.bitmap_cvg, 1),
-                    str(fuzzer.saved_crashes),
+                    Text(fuzzer.fuzzer_name, style="#a8a8a8"),
+                    status_full,
+                    Text(format_number(fuzzer.execs_done), style="#808080"),
+                    Text(format_speed(fuzzer.execs_per_sec) if fuzzer.is_alive else "-", style="#808080"),
+                    Text(f"{fuzzer.cur_item}/{fuzzer.corpus_count}", style="#808080"),
+                    Text(format_percent(fuzzer.bitmap_cvg, 1), style="#808080"),
+                    Text(findings, style="#af5f5f" if (fuzzer.saved_crashes + fuzzer.saved_hangs) > 0 else "#4e4e4e"),
                 )
             else:  # DETAILED
                 self.add_row(
-                    fuzzer.fuzzer_name,
-                    status,
-                    format_duration(fuzzer.run_time),
-                    format_number(fuzzer.execs_done),
-                    format_speed(fuzzer.execs_per_sec) if fuzzer.is_alive else "-",
-                    f"{fuzzer.cur_item}/{fuzzer.corpus_count}",
-                    f"{fuzzer.pending_favs}/{fuzzer.pending_total}",
-                    format_percent(fuzzer.bitmap_cvg, 1),
-                    format_percent(fuzzer.stability, 0),
-                    str(fuzzer.cycles_done),
-                    str(fuzzer.saved_crashes),
-                    f"{fuzzer.cpu_usage:.1f}" if fuzzer.cpu_usage >= 0 else "-",
+                    Text(fuzzer.fuzzer_name, style="#a8a8a8"),
+                    status_full,
+                    Text(format_number(fuzzer.execs_done), style="#808080"),
+                    Text(format_speed(fuzzer.execs_per_sec) if fuzzer.is_alive else "-", style="#808080"),
+                    Text(f"{fuzzer.cur_item}/{fuzzer.corpus_count}", style="#808080"),
+                    Text(f"{fuzzer.pending_favs}/{fuzzer.pending_total}", style="#808080"),
+                    Text(format_percent(fuzzer.bitmap_cvg, 1), style="#808080"),
+                    Text(format_percent(fuzzer.stability, 0), style="#808080"),
+                    Text(str(fuzzer.cycles_done), style="#808080"),
+                    Text(findings, style="#af5f5f" if (fuzzer.saved_crashes + fuzzer.saved_hangs) > 0 else "#4e4e4e"),
+                    Text(f"{fuzzer.cpu_usage:.1f}" if fuzzer.cpu_usage >= 0 else "-", style="#808080"),
+                    Text(str(fuzzer.total_tmout), style="#d7875f" if fuzzer.total_tmout > 100 else "#808080"),
                 )
 
     def action_sort_name(self):
@@ -240,22 +258,23 @@ class AFLMonitorApp(App):
 
     CSS = """
     Screen {
-        background: $surface;
+        background: #0a0a0a;
     }
 
     Header {
-        background: $primary;
-        color: $text;
+        background: #1a1a1a;
+        color: #808080;
     }
 
     Footer {
-        background: $primary-darken-2;
+        background: #121212;
+        color: #606060;
     }
 
     SummaryPanel {
-        height: 8;
-        background: $panel;
-        border: solid $primary;
+        height: 10;
+        background: #0f0f0f;
+        border: solid #2a2a2a;
         padding: 1 2;
         margin: 1;
     }
@@ -263,15 +282,32 @@ class AFLMonitorApp(App):
     FuzzersTable {
         height: 1fr;
         margin: 0 1;
+        background: #0a0a0a;
+    }
+
+    DataTable {
+        background: #0a0a0a;
+        color: #808080;
+    }
+
+    DataTable > .datatable--header {
+        background: #1a1a1a;
+        color: #606060;
+    }
+
+    DataTable > .datatable--cursor {
+        background: #1f1f1f;
     }
 
     #tabs {
         height: 1fr;
+        background: #0a0a0a;
     }
 
     .detail-info {
         padding: 1 2;
-        background: $panel;
+        background: #0f0f0f;
+        color: #606060;
         margin: 0 1 1 1;
     }
     """
@@ -302,7 +338,11 @@ class AFLMonitorApp(App):
             verbose=True,
         )
         self.monitor = AFLMonitor(self.config)
-        self.monitor.load_previous_state()
+        try:
+            self.monitor.load_previous_state()
+        except Exception:
+            # State loading failure is non-critical
+            pass
 
     def compose(self) -> ComposeResult:
         """Compose the UI."""
@@ -325,34 +365,54 @@ class AFLMonitorApp(App):
         self.call_later(self.refresh_data)
 
     async def refresh_data(self) -> None:
-        """Refresh fuzzer data."""
+        """Refresh fuzzer data with error handling."""
         if self.paused:
             return
 
-        # Collect stats
-        all_stats, summary = self.monitor.collect_stats()
-        system_info = ProcessMonitor.get_system_info()
+        try:
+            # Collect stats
+            all_stats, summary = self.monitor.collect_stats()
+            system_info = ProcessMonitor.get_system_info()
 
-        # Update summary panel
-        summary_panel = self.query_one("#summary", SummaryPanel)
-        summary_panel.update_summary(summary, system_info)
+            # Update summary panel
+            try:
+                summary_panel = self.query_one("#summary", SummaryPanel)
+                summary_panel.update_summary(summary, system_info)
+            except Exception as e:
+                self.notify(f"Failed to update summary: {e}", severity="error")
 
-        # Update fuzzers table
-        table = self.query_one("#fuzzers-table", FuzzersTable)
-        table.update_data(all_stats)
+            # Update fuzzers table
+            try:
+                table = self.query_one("#fuzzers-table", FuzzersTable)
+                table.update_data(all_stats)
+            except Exception as e:
+                self.notify(f"Failed to update table: {e}", severity="error")
 
-        # Update system info
-        system_text = self._format_system_info(system_info)
-        self.query_one("#system-info", Static).update(system_text)
+            # Update system info
+            try:
+                system_text = self._format_system_info(system_info)
+                self.query_one("#system-info", Static).update(system_text)
+            except Exception as e:
+                self.notify(f"Failed to update system info: {e}", severity="warning")
 
-        # Update detail info
-        detail_info = f"Detail Level: {self.detail_level.title()} | Sort: {table.sort_key.title()} | Refresh: {self.refresh_interval}s"
-        if self.paused:
-            detail_info += " | [yellow]PAUSED[/yellow]"
-        self.query_one("#detail-info", Static).update(detail_info)
+            # Update detail info
+            try:
+                detail_info = f"Detail Level: {self.detail_level.title()} | Sort: {table.sort_key.title()} | Refresh: {self.refresh_interval}s"
+                if self.paused:
+                    detail_info += " | [yellow]PAUSED[/yellow]"
+                self.query_one("#detail-info", Static).update(detail_info)
+            except Exception as e:
+                pass  # Non-critical
 
-        # Save state
-        self.monitor.save_current_state(summary)
+            # Save state
+            try:
+                self.monitor.save_current_state(summary)
+            except Exception as e:
+                # State saving is non-critical, just log it
+                pass
+
+        except Exception as e:
+            self.notify(f"Error refreshing data: {e}", severity="error")
 
     def _format_system_info(self, system_info: dict) -> str:
         """Format system information."""
