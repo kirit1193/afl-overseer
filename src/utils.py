@@ -122,14 +122,14 @@ def format_speed(execs_per_sec: float) -> str:
         execs_per_sec: Executions per second
 
     Returns:
-        Formatted string like "1,234.56 execs/sec"
+        Formatted string like "1,234.56 ex/s"
     """
     if execs_per_sec >= 1000:
-        return f"{execs_per_sec:,.2f} execs/sec"
+        return f"{execs_per_sec:,.2f} ex/s"
     elif execs_per_sec >= 1:
-        return f"{execs_per_sec:.2f} execs/sec"
+        return f"{execs_per_sec:.2f} ex/s"
     else:
-        return f"{execs_per_sec:.4f} execs/sec"
+        return f"{execs_per_sec:.4f} ex/s"
 
 
 def format_percent(value: float, decimals: int = 2) -> str:
