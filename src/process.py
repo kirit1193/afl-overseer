@@ -64,7 +64,7 @@ class ProcessMonitor:
         Check if fuzzer is still starting up.
 
         Uses the afl-whatsup logic: fuzzer_setup newer than fuzzer_stats
-        and afl-fuzz process accessing the directory.
+        and recent modification time.
         """
         try:
             stats_file = fuzzer_dir / "fuzzer_stats"
@@ -77,25 +77,29 @@ class ProcessMonitor:
             if setup_file.stat().st_mtime <= stats_file.stat().st_mtime:
                 return False
 
-            # Try to find afl-fuzz process using this directory
-            try:
-                # Use fuser to check if afl-fuzz is accessing the directory
-                result = subprocess.run(
-                    ['fuser', '-v', str(fuzzer_dir)],
-                    capture_output=True,
-                    text=True,
-                    timeout=2
-                )
-                if 'afl-fuzz' in result.stderr:
-                    return True
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
-
-            # Fallback: check for recent activity
-            # If setup was modified very recently, assume starting
+            # Check for recent activity - if setup was modified very recently, assume starting
             import time
             age = time.time() - setup_file.stat().st_mtime
-            return age < 60  # Consider starting if setup modified in last minute
+            if age < 60:  # Consider starting if setup modified in last minute
+                return True
+
+            # Optional: Try to find afl-fuzz process (can be slow, so only if recent)
+            # Only check if setup is fairly recent (< 5 minutes)
+            if age < 300:
+                try:
+                    # Use fuser with shorter timeout for faster checks
+                    result = subprocess.run(
+                        ['fuser', '-v', str(fuzzer_dir)],
+                        capture_output=True,
+                        text=True,
+                        timeout=0.5  # Reduced from 2 seconds
+                    )
+                    if 'afl-fuzz' in result.stderr:
+                        return True
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    pass
+
+            return False
 
         except Exception as e:
             logger.debug(f"Error checking startup status for {fuzzer_dir}: {e}")
@@ -107,8 +111,9 @@ class ProcessMonitor:
         try:
             process = psutil.Process(pid)
 
-            # Get CPU usage (percentage)
-            cpu_percent = process.cpu_percent(interval=0.1)
+            # Get CPU usage (percentage) - use interval=0 for instant cached reading
+            # This is much faster than interval=0.1 which blocks for 100ms per process
+            cpu_percent = process.cpu_percent(interval=0)
 
             # Get memory usage (percentage)
             mem_percent = process.memory_percent()
@@ -129,7 +134,8 @@ class ProcessMonitor:
         """Get system resource information."""
         try:
             cpu_count = psutil.cpu_count()
-            cpu_percent = psutil.cpu_percent(interval=0.1)
+            # Use interval=0 for instant cached reading instead of blocking
+            cpu_percent = psutil.cpu_percent(interval=0)
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
 

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import asdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 
 from .models import FuzzerStats, CampaignSummary, MonitorConfig
@@ -25,7 +26,7 @@ class AFLMonitor:
 
     def collect_stats(self) -> tuple[List[FuzzerStats], CampaignSummary]:
         """
-        Collect statistics from all fuzzers.
+        Collect statistics from all fuzzers using parallel processing.
 
         Returns:
             Tuple of (fuzzer_stats_list, campaign_summary)
@@ -37,14 +38,36 @@ class AFLMonitor:
             logger.warning(f"No fuzzers found in {self.config.findings_dir}")
             return [], CampaignSummary()
 
-        # Parse each fuzzer
+        # Parse each fuzzer in parallel for better performance
         all_stats: List[FuzzerStats] = []
-        for fuzzer_dir in fuzzer_dirs:
-            stats = self._collect_fuzzer_stats(fuzzer_dir)
-            if stats:
-                # Only add if alive or if showing dead fuzzers
-                if stats.is_alive or self.config.show_dead:
-                    all_stats.append(stats)
+
+        # Use parallel processing if we have multiple fuzzers
+        if len(fuzzer_dirs) > 1:
+            # Limit workers to avoid overwhelming the system
+            max_workers = min(len(fuzzer_dirs), 10)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all fuzzer collection tasks
+                future_to_dir = {
+                    executor.submit(self._collect_fuzzer_stats, fuzzer_dir): fuzzer_dir
+                    for fuzzer_dir in fuzzer_dirs
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_dir):
+                    try:
+                        stats = future.result()
+                        if stats:
+                            # Only add if alive or if showing dead fuzzers
+                            if stats.is_alive or self.config.show_dead:
+                                all_stats.append(stats)
+                    except Exception as e:
+                        fuzzer_dir = future_to_dir[future]
+                        logger.error(f"Error collecting stats for {fuzzer_dir}: {e}")
+        else:
+            # Single fuzzer, no need for threading
+            stats = self._collect_fuzzer_stats(fuzzer_dirs[0])
+            if stats and (stats.is_alive or self.config.show_dead):
+                all_stats.append(stats)
 
         # Create summary
         summary = self._create_summary(all_stats)
