@@ -103,22 +103,48 @@ def main(**kwargs):
 
     # Web server mode
     if wants_web:
-        from .webserver import run_web_server
-        try:
-            asyncio.run(run_web_server(
-                findings_dir=Path(kwargs['findings_directory']),
-                port=kwargs['web_port'],
-                headless=wants_headless,
-                refresh_interval=kwargs['interval']
-            ))
-        except KeyboardInterrupt:
-            click.echo("\n\nShutting down...")
-        except Exception as e:
-            click.echo(f"\nError: {e}", err=True)
-            if kwargs['verbose']:
-                import traceback
-                traceback.print_exc()
-            sys.exit(1)
+        # Handle non-headless mode specially - TUI must run in main thread
+        if not wants_headless:
+            from .webserver import start_web_server_background
+            from .tui import run_interactive_tui
+            try:
+                # Start web server in background thread
+                web_thread = start_web_server_background(
+                    findings_dir=Path(kwargs['findings_directory']),
+                    port=kwargs['web_port'],
+                    refresh_interval=kwargs['interval']
+                )
+                # Run TUI in main thread (required for signal handling)
+                run_interactive_tui(
+                    Path(kwargs['findings_directory']),
+                    refresh_interval=kwargs['interval']
+                )
+            except KeyboardInterrupt:
+                click.echo("\n\nShutting down...")
+            except Exception as e:
+                click.echo(f"\nError: {e}", err=True)
+                if kwargs['verbose']:
+                    import traceback
+                    traceback.print_exc()
+                sys.exit(1)
+        else:
+            # Headless mode - run web server in main async context
+            from .webserver import run_web_server
+            try:
+                asyncio.run(run_web_server(
+                    findings_dir=Path(kwargs['findings_directory']),
+                    port=kwargs['web_port'],
+                    headless=True,
+                    refresh_interval=kwargs['interval']
+                ))
+            except KeyboardInterrupt:
+                click.echo("\n\nShutting down...")
+            except Exception as e:
+                click.echo(f"\nError: {e}", err=True)
+                if kwargs['verbose']:
+                    import traceback
+                    traceback.print_exc()
+                sys.exit(1)
         return
 
     # Default to interactive TUI if just a directory is provided

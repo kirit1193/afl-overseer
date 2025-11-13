@@ -1050,6 +1050,70 @@ class WebServer:
             )
 
 
+def _run_web_server_in_thread(findings_dir: Path, port: int, refresh_interval: int):
+    """Run web server in background thread with its own event loop."""
+    # Create new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    server = WebServer(findings_dir, refresh_interval)
+
+    async def _start_server():
+        runner = web.AppRunner(server.app)
+        await runner.setup()
+
+        try:
+            site = web.TCPSite(runner, '0.0.0.0', port)
+            await site.start()
+
+            print(f"\nAFL Overseer Dashboard")
+            print(f"   Local:    http://localhost:{port}")
+            print(f"   Network:  http://0.0.0.0:{port}")
+            print(f"   Mode:     With TUI")
+            print(f"   Refresh:  {refresh_interval}s\n")
+
+            # Keep running until interrupted
+            await asyncio.Event().wait()
+        except OSError as e:
+            if "Address already in use" in str(e) or "Errno 98" in str(e):
+                print(f"\nError: Port {port} is already in use")
+                print(f"   Try a different port with: -p <port_number>")
+                print(f"   Or stop the process using port {port}\n")
+            else:
+                print(f"\nError starting server: {e}\n")
+        finally:
+            await runner.cleanup()
+
+    try:
+        loop.run_until_complete(_start_server())
+    except Exception as e:
+        logging.error(f"Web server error: {e}")
+    finally:
+        loop.close()
+
+
+def start_web_server_background(
+    findings_dir: Path,
+    port: int = 8080,
+    refresh_interval: int = 5
+) -> threading.Thread:
+    """
+    Start web server in a background thread.
+
+    Returns the thread object so caller can manage it.
+    """
+    web_thread = threading.Thread(
+        target=_run_web_server_in_thread,
+        args=(findings_dir, port, refresh_interval),
+        daemon=True
+    )
+    web_thread.start()
+    # Give web server a moment to start
+    import time
+    time.sleep(1)
+    return web_thread
+
+
 async def run_web_server(
     findings_dir: Path,
     port: int = 8080,
@@ -1062,25 +1126,21 @@ async def run_web_server(
     Args:
         findings_dir: Path to AFL sync directory
         port: Port to run server on
-        headless: If True, run without TUI. If False, run TUI in background thread
+        headless: If True, run without TUI. If False, start web in background and signal to run TUI
         refresh_interval: Data refresh interval in seconds
     """
+    # If not headless, we can't run TUI from here due to async/signal issues
+    # Signal back to caller to handle TUI in main thread
+    if not headless:
+        # This should not be called - CLI should handle non-headless mode differently
+        raise RuntimeError(
+            "Non-headless mode must be handled by starting web server in background "
+            "and TUI in main thread. Use start_web_server_background() instead."
+        )
+
+    # Headless mode - run web server in main async context
     server = WebServer(findings_dir, refresh_interval)
 
-    # Start TUI in background thread if not headless
-    tui_thread = None
-    if not headless:
-        def run_tui():
-            try:
-                from .tui import run_interactive_tui
-                run_interactive_tui(findings_dir, refresh_interval)
-            except Exception as e:
-                logging.error(f"TUI error: {e}")
-
-        tui_thread = threading.Thread(target=run_tui, daemon=True)
-        tui_thread.start()
-
-    # Start web server with error handling
     try:
         runner = web.AppRunner(server.app)
         await runner.setup()
@@ -1101,11 +1161,11 @@ async def run_web_server(
         print(f"\nAFL Overseer Dashboard")
         print(f"   Local:    http://localhost:{port}")
         print(f"   Network:  http://0.0.0.0:{port}")
-        print(f"   Mode:     {'Headless' if headless else 'With TUI'}")
+        print(f"   Mode:     Headless")
         print(f"   Refresh:  {refresh_interval}s\n")
         print("Press Ctrl+C to stop...\n")
 
-        # Keep server running
+        # Keep server running in headless mode
         try:
             await asyncio.Event().wait()
         except KeyboardInterrupt:
