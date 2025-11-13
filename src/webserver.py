@@ -416,9 +416,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
     <div class="header">
-        <h1>⚡ AFL Overseer Dashboard</h1>
+        <h1>AFL Overseer Dashboard</h1>
         <div class="header-info">
-            <button class="theme-toggle" onclick="toggleTheme()">🌓 Theme</button>
+            <button class="theme-toggle" onclick="toggleTheme()">Theme</button>
             <div class="status-badge live">● LIVE</div>
             <div id="lastUpdate">Last update: --:--:--</div>
             <div>Refresh: <span id="refreshInterval">5</span>s</div>
@@ -755,7 +755,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (deadCount > 0) {
                 alerts.push({
                     type: 'danger',
-                    icon: '⚠️',
+                    icon: '!',
                     message: `${deadCount} fuzzer${deadCount > 1 ? 's' : ''} not responding (dead)`
                 });
             }
@@ -765,7 +765,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (f.status === 'ALIVE' && f.stability < 80) {
                     alerts.push({
                         type: 'warning',
-                        icon: '⚡',
+                        icon: '!',
                         message: `${f.name}: Low stability (${f.stability.toFixed(1)}%)`
                     });
                 }
@@ -776,7 +776,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (f.status === 'ALIVE' && f.slowest_exec_ms > 100) {
                     alerts.push({
                         type: 'warning',
-                        icon: '🐌',
+                        icon: '!',
                         message: `${f.name}: High execution timeout (${f.slowest_exec_ms}ms)`
                     });
                 }
@@ -842,8 +842,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             tbody.innerHTML = data.fuzzers.map(f => {
                 const rowClass = f.status === 'DEAD' ? 'dead' : (f.stability < 80 ? 'warning' : '');
                 const warnings = [];
-                if (f.stability < 80) warnings.push(`⚡${f.stability.toFixed(1)}%`);
-                if (f.slowest_exec_ms > 100) warnings.push(`🐌${f.slowest_exec_ms}ms`);
+                if (f.stability < 80) warnings.push(`!${f.stability.toFixed(1)}%`);
+                if (f.slowest_exec_ms > 100) warnings.push(`slow:${f.slowest_exec_ms}ms`);
 
                 return `
                 <tr class="${rowClass}">
@@ -1090,15 +1090,15 @@ async def run_web_server(
             await site.start()
         except OSError as e:
             if "Address already in use" in str(e) or "Errno 98" in str(e):
-                print(f"\n❌ Error: Port {port} is already in use")
+                print(f"\nError: Port {port} is already in use")
                 print(f"   Try a different port with: -p <port_number>")
                 print(f"   Or stop the process using port {port}\n")
             else:
-                print(f"\n❌ Error starting server: {e}\n")
+                print(f"\nError starting server: {e}\n")
             await runner.cleanup()
             return
 
-        print(f"\n🌐 AFL Overseer Dashboard")
+        print(f"\nAFL Overseer Dashboard")
         print(f"   Local:    http://localhost:{port}")
         print(f"   Network:  http://0.0.0.0:{port}")
         print(f"   Mode:     {'Headless' if headless else 'With TUI'}")
@@ -1115,5 +1115,5 @@ async def run_web_server(
 
     except Exception as e:
         logging.error(f"Failed to start web server: {e}")
-        print(f"\n❌ Fatal error: {e}\n")
+        print(f"\nFatal error: {e}\n")
         raise

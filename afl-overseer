@@ -52,7 +52,7 @@ def check_dependencies():
         missing.append("aiohttp>=3.8.0")
 
     if missing or outdated:
-        print("\n❌ Missing or outdated dependencies detected!\n", file=sys.stderr)
+        print("\nError: Missing or outdated dependencies detected!\n", file=sys.stderr)
         if missing:
             print("Missing packages:", file=sys.stderr)
             for pkg in missing:
@@ -62,7 +62,7 @@ def check_dependencies():
             for pkg in outdated:
                 print(f"  - {pkg}", file=sys.stderr)
 
-        print("\n📦 To fix this, run one of these commands:\n", file=sys.stderr)
+        print("\nTo fix this, run one of these commands:\n", file=sys.stderr)
         print("  # Option 1: Install in user directory", file=sys.stderr)
         print("  pip3 install --user -r requirements.txt\n", file=sys.stderr)
         print("  # Option 2: Use a virtual environment (recommended)", file=sys.stderr)
