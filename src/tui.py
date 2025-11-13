@@ -91,37 +91,47 @@ class SummaryPanel(Static):
         # Corpus stats - pending paths
         left_col.append(f"[#808080]  corpus:[/#808080] {format_number(s.total_corpus)}  [#808080]pending:[/#808080] {s.total_pending} [dim]({s.total_pending_favs} favs)[/dim]")
 
-        # Last activity (latest find across all fuzzers)
-        left_col.append(f"[#808080]   finds:[/#808080] {format_time_ago(s.last_find_time)}")
+        # Last activity (latest find across all fuzzers) - ALWAYS show
+        last_find_display = format_time_ago(s.last_find_time) if s.last_find_time > 0 else "never"
+        left_col.append(f"[#808080]last find:[/#808080] {last_find_display}")
 
-        # Cycles without finds indicator - show per fuzzer
-        if s.cycles_wo_finds and s.cycles_wo_finds != "N/A":
-            cwof_display = s.cycles_wo_finds
-            # Parse to determine color - look for highest value
-            try:
-                cwof_values = [int(x) for x in s.cycles_wo_finds.split('/') if x.isdigit()]
-                max_cwof = max(cwof_values) if cwof_values else 0
-                cwof_color = "#d75f5f" if max_cwof > 50 else "#d7af5f" if max_cwof > 10 else "#808080"
-            except:
-                cwof_color = "#808080"
-            left_col.append(f"[#808080] no finds:[/#808080] [{cwof_color}]{cwof_display}[/{cwof_color}] cycles")
+        # Cycles without finds indicator - show per fuzzer - ALWAYS show if we have fuzzers
+        if s.total_fuzzers > 0:
+            if s.cycles_wo_finds and s.cycles_wo_finds != "N/A":
+                cwof_display = s.cycles_wo_finds
+                # Parse to determine color - look for highest value
+                try:
+                    cwof_values = [int(x) for x in s.cycles_wo_finds.split('/') if x.isdigit()]
+                    max_cwof = max(cwof_values) if cwof_values else 0
+                    cwof_color = "#d75f5f" if max_cwof > 50 else "#d7af5f" if max_cwof > 10 else "#808080"
+                except:
+                    cwof_color = "#808080"
+                left_col.append(f"[#808080] no finds:[/#808080] [{cwof_color}]{cwof_display}[/{cwof_color}] cycles")
+            else:
+                left_col.append(f"[#808080] no finds:[/#808080] [dim]N/A[/dim]")
 
-        # RIGHT COLUMN - System info
+        # RIGHT COLUMN - System info (right-aligned)
         if sys_info:
-            right_col.append(f"[#808080]System Resources[/#808080]")
-            right_col.append(f"[#808080]CPU:[/#808080] {sys_info.get('cpu_percent', 0):.1f}% [dim]({sys_info.get('cpu_count', 0)} cores)[/dim]")
-            right_col.append(f"[#808080]Mem:[/#808080] {sys_info.get('memory_used_gb', 0):.1f}/{sys_info.get('memory_total_gb', 0):.1f} GB [dim]({sys_info.get('memory_percent', 0):.1f}%)[/dim]")
-            right_col.append(f"[#808080]Disk:[/#808080] {sys_info.get('disk_used_gb', 0):.0f}/{sys_info.get('disk_total_gb', 0):.0f} GB [dim]({sys_info.get('disk_percent', 0):.1f}%)[/dim]")
+            right_col.append(f"[bold #808080]System[/bold #808080]")
+            # Use icons: ⚙ for CPU, ▪ for memory, ▪ for disk
+            right_col.append(f"[#5f8787]⚙[/#5f8787] {sys_info.get('cpu_percent', 0):.1f}% [dim]({sys_info.get('cpu_count', 0)} cores)[/dim]")
+            right_col.append(f"[#875f87]▪[/#875f87] {sys_info.get('memory_used_gb', 0):.1f}/{sys_info.get('memory_total_gb', 0):.1f} GB [dim]({sys_info.get('memory_percent', 0):.1f}%)[/dim]")
+            right_col.append(f"[#5f875f]▪[/#5f875f] {sys_info.get('disk_used_gb', 0):.0f}/{sys_info.get('disk_total_gb', 0):.0f} GB [dim]({sys_info.get('disk_percent', 0):.1f}%)[/dim]")
 
-        # Combine columns side by side
+        # Combine columns side by side with right-aligned right column
         output = []
         max_lines = max(len(left_col), len(right_col))
         for i in range(max_lines):
             left = left_col[i] if i < len(left_col) else ""
             right = right_col[i] if i < len(right_col) else ""
-            # Pad left column to align right column
+            # Right-align the right column at position 62
             if right:
-                output.append(f"{left:<60}  {right}")
+                # Strip markup for length calculation
+                from rich.console import Console
+                from rich.text import Text as RichText
+                console = Console()
+                # Simple approach: pad left to 50 chars visible width
+                output.append(f"{left:<50}  {right:>26}")
             else:
                 output.append(left)
 
@@ -449,11 +459,12 @@ class AFLMonitorApp(App):
     detail_level = reactive(DetailLevel.NORMAL)
     paused = reactive(False)
 
-    def __init__(self, sync_dir: Path, refresh_interval: int = 5):
+    def __init__(self, sync_dir: Path, refresh_interval: int = 1):
         super().__init__()
         self.sync_dir = sync_dir
         self.refresh_interval = refresh_interval
         self.show_dead = False
+        self.command_line = ""  # Store command line for display
         self.config = MonitorConfig(
             findings_dir=sync_dir,
             show_dead=self.show_dead,
@@ -516,11 +527,22 @@ class AFLMonitorApp(App):
                 # Non-critical, graphs may not be visible
                 pass
 
-            # Update detail info
+            # Update detail info with command line if available
             try:
                 detail_info = f"Detail Level: {self.detail_level.title()} | Sort: {table.sort_key.title()} | Refresh: {self.refresh_interval}s"
                 if self.paused:
                     detail_info += " | [yellow]PAUSED[/yellow]"
+
+                # Add command line if available
+                if self.command_line:
+                    detail_info += f"\n[dim]cmd:[/dim] {self.command_line}"
+                elif all_stats:
+                    # Get command line from first fuzzer
+                    cmd = all_stats[0].command_line
+                    if cmd:
+                        self.command_line = cmd
+                        detail_info += f"\n[dim]cmd:[/dim] {cmd}"
+
                 self.query_one("#detail-info", Static).update(detail_info)
             except Exception as e:
                 pass  # Non-critical
@@ -548,6 +570,8 @@ class AFLMonitorApp(App):
         table.setup_columns()
         table.update_data(table.fuzzer_data)
         self.notify("Switched to Compact view")
+        # Trigger immediate refresh
+        self.call_later(self.refresh_data)
 
     def action_detail_normal(self) -> None:
         """Switch to normal detail level."""
@@ -557,6 +581,8 @@ class AFLMonitorApp(App):
         table.setup_columns()
         table.update_data(table.fuzzer_data)
         self.notify("Switched to Normal view")
+        # Trigger immediate refresh
+        self.call_later(self.refresh_data)
 
     def action_detail_detailed(self) -> None:
         """Switch to detailed level."""
@@ -566,6 +592,8 @@ class AFLMonitorApp(App):
         table.setup_columns()
         table.update_data(table.fuzzer_data)
         self.notify("Switched to Detailed view")
+        # Trigger immediate refresh
+        self.call_later(self.refresh_data)
 
     def action_toggle_dead(self) -> None:
         """Toggle showing dead fuzzers."""
@@ -582,7 +610,7 @@ class AFLMonitorApp(App):
         self.notify(f"Auto-refresh {status}")
 
 
-def run_interactive_tui(sync_dir: Path, refresh_interval: int = 5):
+def run_interactive_tui(sync_dir: Path, refresh_interval: int = 1):
     """Run the interactive TUI."""
     app = AFLMonitorApp(sync_dir, refresh_interval)
     app.run()
