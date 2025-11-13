@@ -1,4 +1,4 @@
-# AFL Monitor - Next Generation Requirements
+# AFL Overseer Requirements
 # Python 3.8+
 
 # Core dependencies

@@ -1,4 +1,4 @@
-"""Command-line interface for AFL Monitor."""
+"""Command-line interface for AFL Overseer."""
 
 import sys
 import asyncio
@@ -80,7 +80,7 @@ def main(**kwargs):
       #   p - Pause/Resume
     """
     if kwargs['version']:
-        click.echo("AFL Overseer v2.0")
+        click.echo("AFL Overseer v0.1")
         sys.exit(0)
 
     # Check if findings_directory is provided
@@ -205,7 +205,7 @@ async def execute_notification(config: MonitorConfig, summary, all_stats):
     """Execute notification command."""
     try:
         # Prepare summary text
-        summary_text = f"""AFL Monitor - New Crash Detected!
+        summary_text = f"""AFL Overseer - New Crash Detected!
 
 Timestamp: {get_timestamp()}
 Total Crashes: {summary.total_crashes}

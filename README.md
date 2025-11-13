@@ -7,9 +7,9 @@
 
 ---
 
-## 🚀 What's New in v2.0
+## 🚀 Overview
 
-AFL Overseer is a complete rewrite from the ground up with modern Python 3, incorporating the best features from both the original afl-monitor and AFLplusplus/afl-whatsup:
+AFL Overseer is a modern monitoring and visualization tool built with Python 3.8+, incorporating the best features from both the original afl-monitor and AFLplusplus/afl-whatsup:
 
 ### ✨ Major Features
 

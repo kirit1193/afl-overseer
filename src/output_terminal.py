@@ -33,7 +33,7 @@ class TerminalOutput:
 
         banner = Text()
         banner.append("AFL Overseer", style="bold cyan")
-        banner.append(" v2.0\n", style="dim")
+        banner.append(" v0.1\n", style="dim")
         console.print(banner)
 
     def print_campaign_summary(
