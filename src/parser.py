@@ -211,29 +211,54 @@ class PlotDataParser:
 
 def discover_fuzzers(sync_dir: Path) -> List[Path]:
     """
-    Discover all fuzzer instances in a sync directory.
+    Discover all fuzzer instances. Intelligently detects:
+    - Individual fuzzer directory (contains fuzzer_stats directly)
+    - Sync directory (contains subdirectories with fuzzer_stats)
 
     Args:
-        sync_dir: Path to AFL sync directory
+        sync_dir: Path to AFL sync directory or individual fuzzer directory
 
     Returns:
         List of paths to fuzzer instance directories
     """
     fuzzers = []
 
-    if not sync_dir.exists() or not sync_dir.is_dir():
-        logger.error(f"Sync directory not found: {sync_dir}")
+    try:
+        if not sync_dir.exists():
+            logger.error(f"Directory not found: {sync_dir}")
+            return fuzzers
+
+        if not sync_dir.is_dir():
+            logger.error(f"Not a directory: {sync_dir}")
+            return fuzzers
+    except (PermissionError, OSError) as e:
+        logger.error(f"Cannot access directory {sync_dir}: {e}")
         return fuzzers
 
-    # Check if this is a sync dir or individual fuzzer dir
-    if (sync_dir / "fuzzer_stats").exists():
-        logger.error(f"Error: {sync_dir} is an individual fuzzer directory, not a sync directory")
+    # Check if this is an individual fuzzer directory
+    try:
+        if (sync_dir / "fuzzer_stats").exists():
+            logger.info(f"Detected individual fuzzer directory: {sync_dir.name}")
+            fuzzers.append(sync_dir)
+            return fuzzers
+    except (PermissionError, OSError) as e:
+        logger.warning(f"Cannot check for fuzzer_stats in {sync_dir}: {e}")
+
+    # This is a sync directory - find all subdirectories with fuzzer_stats
+    try:
+        for item in sync_dir.iterdir():
+            try:
+                if item.is_dir() and (item / "fuzzer_stats").exists():
+                    fuzzers.append(item)
+                    logger.debug(f"Found fuzzer: {item.name}")
+            except (PermissionError, OSError) as e:
+                logger.warning(f"Cannot access fuzzer directory {item}: {e}")
+                continue
+    except (PermissionError, OSError) as e:
+        logger.error(f"Cannot iterate directory {sync_dir}: {e}")
         return fuzzers
 
-    # Find all subdirectories with fuzzer_stats
-    for item in sync_dir.iterdir():
-        if item.is_dir() and (item / "fuzzer_stats").exists():
-            fuzzers.append(item)
-            logger.debug(f"Found fuzzer: {item.name}")
+    if not fuzzers:
+        logger.warning(f"No fuzzer instances found in {sync_dir}")
 
     return sorted(fuzzers)
