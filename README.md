@@ -14,17 +14,17 @@ AFL Monitor has been completely rewritten from the ground up with modern Python 
 ### ✨ Major Features
 
 - **🖥️ Interactive TUI** - htop-like interface with live updates, sortable columns, and 3 detail levels
+- **🌐 Web Dashboard** - Modern netdata-like web UI with real-time graphs, metrics, and mobile-friendly design
 - **🐍 Modern Python 3.8+** - Type hints, dataclasses, async/await support
 - **🎨 Beautiful Terminal UI** - Rich terminal output with colors, tables, and progress indicators
-- **📊 Interactive HTML Reports** - Responsive, modern web interface with gradient styling
-- **📈 JSON Export** - Machine-readable output for automation and integrations
-- **🔄 Watch Mode** - Auto-refresh monitoring with configurable intervals
+- **📊 REST API** - JSON API endpoint for integrations and custom dashboards
 - **⚡ Comprehensive Stats** - Parses ALL fuzzer_stats fields including AFL++ 4.x features
 - **🔍 Smart Process Detection** - Detects alive, dead, and starting instances
 - **💻 Resource Monitoring** - CPU and memory usage per fuzzer
 - **⚠️ Intelligent Warnings** - Automatic detection of performance issues
 - **🔔 Crash Notifications** - Execute custom commands on new crashes
 - **🔒 Security** - No unsafe pickle, no command injection, proper input validation
+- **⚡ Minimal Dependencies** - Lightweight with only essential packages (aiohttp for web server)
 
 ### 🆕 New Metrics Tracked
 
@@ -91,6 +91,28 @@ pip3 install click rich psutil textual
 #   p - Pause/Resume auto-refresh
 ```
 
+### Web Dashboard Mode
+
+```bash
+# Web dashboard with TUI (default port 8080)
+./afl-monitor-ng -w /path/to/sync_dir
+
+# Web dashboard headless (no TUI, perfect for remote servers)
+./afl-monitor-ng -w --headless /path/to/sync_dir
+
+# Custom port
+./afl-monitor-ng -w -p 3000 /path/to/sync_dir
+
+# Then open http://localhost:8080 in your browser
+# Features:
+#   - Real-time metrics and graphs
+#   - Live fuzzer status table
+#   - System resource monitoring
+#   - Auto-refresh every 5 seconds (customizable with -i)
+#   - Mobile-friendly responsive design
+#   - REST API at /api/stats
+```
+
 ### Static Terminal Output
 
 ```bash
@@ -99,22 +121,6 @@ pip3 install click rich psutil textual
 
 # Static with detailed per-fuzzer statistics
 ./afl-monitor-ng -s -v /path/to/sync_dir
-
-# Static with auto-refresh (watch mode)
-./afl-monitor-ng -s -w -i 10 /path/to/sync_dir
-```
-
-### File Output Formats
-
-```bash
-# Generate HTML report
-./afl-monitor-ng -h ./report /path/to/sync_dir
-
-# Export to JSON
-./afl-monitor-ng -j stats.json /path/to/sync_dir
-
-# Multiple outputs simultaneously
-./afl-monitor-ng -s -v -j stats.json -h ./report /path/to/sync_dir
 ```
 
 ### Advanced Examples
@@ -132,8 +138,8 @@ pip3 install click rich psutil textual
 # No color output (for logs)
 ./afl-monitor-ng -s -n /path/to/sync_dir
 
-# Watch mode with JSON export
-./afl-monitor-ng -s -w -i 30 -j /var/www/stats.json /path/to/sync_dir
+# Web dashboard on custom port with 10-second refresh
+./afl-monitor-ng -w -p 9090 -i 10 --headless /path/to/sync_dir
 ```
 
 ---
@@ -142,13 +148,13 @@ pip3 install click rich psutil textual
 
 | Option | Description |
 |--------|-------------|
-| `-t`, `--tui` | Interactive TUI mode like htop (default when no output flags) |
+| `-t`, `--tui` | Interactive TUI mode like htop (default when no flags) |
 | `-s`, `--static` | Static terminal output (non-interactive) |
-| `-h`, `--html DIR` | Generate HTML report in directory |
-| `-j`, `--json FILE` | Write JSON output to file |
+| `-w`, `--web` | Start web server with live dashboard |
+| `-p`, `--port PORT` | Web server port (default: 8080) |
+| `--headless` | Run web server without TUI (headless mode) |
 | `-v`, `--verbose` | Show detailed per-fuzzer statistics |
 | `-n`, `--no-color` | Disable colored output |
-| `-w`, `--watch` | Watch mode - auto-refresh (for static output) |
 | `-i`, `--interval SEC` | Refresh interval in seconds (default: 5) |
 | `-d`, `--show-dead` | Include dead fuzzers in output |
 | `-m`, `--minimal` | Minimal output mode (summary only) |
@@ -177,51 +183,73 @@ When using the interactive TUI mode (default), you can use these keyboard shortc
 
 ---
 
-## 📊 Output Formats
+## 📊 Output Modes
 
-### Terminal Output
+### Interactive TUI (Default)
 
-Beautiful, colorized terminal output with:
+Beautiful terminal interface with:
 - Campaign summary with key metrics
-- Per-fuzzer detailed statistics (with `-v`)
+- Per-fuzzer detailed statistics with 3 detail levels
 - Status indicators (alive/dead/starting)
-- Performance warnings
-- Resource usage
-- Delta tracking between runs
+- Sortable columns
+- Live updates with keyboard controls
+- Resource usage per fuzzer
 
-### HTML Report
+### Web Dashboard
 
-Modern, responsive HTML with:
-- Gradient design with hover effects
-- Campaign summary cards
-- Per-fuzzer detailed cards
-- Status badges
-- Performance warnings
-- Mobile-friendly responsive layout
-- Auto-refresh support in watch mode
+Modern netdata-like web interface with:
+- **Real-time graphs**: Execution speed, coverage, paths found over time
+- **Live metrics**: Campaign summary with auto-refresh
+- **Fuzzer table**: Sortable table showing all fuzzers
+- **System monitoring**: CPU, memory, cycle statistics
+- **Responsive design**: Works perfectly on mobile devices
+- **Dark theme**: Easy on the eyes during long fuzzing sessions
+- **Tabbed interface**: Overview, Fuzzers, Graphs, System tabs
+- **REST API**: `/api/stats` endpoint for integrations
 
-### JSON Export
-
-Machine-readable JSON containing:
-- Metadata (timestamp, version, directory)
-- Complete campaign summary
-- Array of all fuzzer statistics
-- System resource information
-
-Example structure:
+Example API response structure:
 ```json
 {
-  "metadata": {
-    "timestamp": 1234567890,
-    "timestamp_str": "2024-01-15 14:30:00",
-    "monitor_version": "2.0",
-    "findings_directory": "/path/to/sync_dir"
+  "summary": {
+    "alive_fuzzers": 3,
+    "total_fuzzers": 3,
+    "total_execs": 1000000,
+    "current_speed": 500.0,
+    "max_coverage": 45.2,
+    "total_crashes": 5,
+    "corpus_count": 250
   },
-  "summary": { ... },
-  "fuzzers": [ ... ],
-  "system": { ... }
+  "fuzzers": [
+    {
+      "name": "master",
+      "status": "ALIVE",
+      "run_time": 3600,
+      "execs_done": 500000,
+      "exec_speed": 200.5,
+      "bitmap_cvg": 45.2,
+      "saved_crashes": 3,
+      "corpus_count": 120
+    }
+  ],
+  "system": {
+    "cpu_cores": 16,
+    "cpu_percent": 25.5,
+    "memory_total_gb": 32.0,
+    "memory_used_gb": 8.5,
+    "memory_percent": 26.6
+  }
 }
 ```
+
+### Static Terminal Output
+
+One-time terminal output with:
+- Colorized campaign summary
+- Per-fuzzer statistics (with `-v`)
+- Status indicators
+- Resource usage
+- Performance warnings
+- Delta tracking between runs
 
 ---
 
@@ -236,14 +264,13 @@ afl-monitor/
 │   ├── __init__.py          # Package init
 │   ├── cli.py               # Command-line interface
 │   ├── tui.py               # Interactive TUI (htop-like interface)
+│   ├── webserver.py         # Web server and dashboard (netdata-like UI)
 │   ├── models.py            # Data models (dataclasses)
 │   ├── parser.py            # Stats and plot data parsers
 │   ├── process.py           # Process detection and monitoring
 │   ├── monitor.py           # Core monitoring logic
 │   ├── utils.py             # Utility functions
-│   ├── output_terminal.py   # Terminal output formatter
-│   ├── output_json.py       # JSON output formatter
-│   └── output_html.py       # HTML output formatter
+│   └── output_terminal.py   # Terminal output formatter
 ├── requirements.txt         # Python dependencies
 └── README.md               # This file
 ```
@@ -251,11 +278,12 @@ afl-monitor/
 ### Key Components
 
 - **Interactive TUI**: Textual-based htop-like interface with live updates, sortable tables, and keyboard controls
+- **Web Dashboard**: Aiohttp-based web server with embedded modern HTML/CSS/JS dashboard, real-time graphs (Chart.js), and REST API
 - **Models**: Type-safe data structures using Python dataclasses
 - **Parser**: Robust parsing of fuzzer_stats and plot_data files
 - **Process Monitor**: Detects process status, CPU/memory usage, startup detection
 - **Core Monitor**: Aggregates stats, calculates summaries, tracks deltas
-- **Output Formatters**: Modular output system supporting multiple formats (TUI, terminal, JSON, HTML)
+- **Output Formatters**: Modular output system for terminal display
 - **CLI**: Modern click-based interface with async support
 
 ---

@@ -13,8 +13,6 @@ from .models import MonitorConfig
 from .monitor import AFLMonitor
 from .process import ProcessMonitor
 from .output_terminal import TerminalOutput
-from .output_json import JSONOutput
-from .output_html import HTMLOutput
 from .utils import get_timestamp
 
 
@@ -31,11 +29,11 @@ def setup_logging(verbose: bool):
 @click.argument('findings_directory', type=click.Path(exists=True, file_okay=False), required=False)
 @click.option('-t', '--tui', 'interactive_tui', is_flag=True, help='Interactive TUI mode (like htop)')
 @click.option('-s', '--static', 'static_output', is_flag=True, help='Static terminal output (non-interactive)')
-@click.option('-h', '--html', 'html_dir', type=click.Path(), help='Generate HTML report in directory')
-@click.option('-j', '--json', 'json_file', type=click.Path(), help='Write JSON output to file')
+@click.option('-w', '--web', 'web_server', is_flag=True, help='Start web server with live dashboard')
+@click.option('-p', '--port', 'web_port', default=8080, help='Web server port (default: 8080)')
+@click.option('--headless', is_flag=True, help='Run web server in headless mode (without TUI)')
 @click.option('-v', '--verbose', is_flag=True, help='Show detailed per-fuzzer statistics')
 @click.option('-n', '--no-color', is_flag=True, help='Disable colored output')
-@click.option('-w', '--watch', 'watch_mode', is_flag=True, help='Watch mode - auto-refresh (for static output)')
 @click.option('-i', '--interval', default=5, help='Refresh interval in seconds (default: 5)')
 @click.option('-d', '--show-dead', is_flag=True, help='Include dead fuzzers in output')
 @click.option('-m', '--minimal', is_flag=True, help='Minimal output mode')
@@ -50,7 +48,8 @@ def main(**kwargs):
     FINDINGS_DIRECTORY should point to the AFL sync directory containing
     one or more fuzzer instance subdirectories.
 
-    By default, starts interactive TUI mode (like htop). Use -s for static output.
+    By default, starts interactive TUI mode (like htop). Use -s for static output
+    or -w for web dashboard.
 
     Examples:
 
@@ -60,20 +59,16 @@ def main(**kwargs):
       afl-monitor-ng -t /path/to/sync_dir
 
     \b
+      # Web dashboard with TUI
+      afl-monitor-ng -w /path/to/sync_dir
+
+    \b
+      # Web dashboard headless (no TUI)
+      afl-monitor-ng -w --headless /path/to/sync_dir
+
+    \b
       # Static terminal output (one-time)
       afl-monitor-ng -s /path/to/sync_dir
-
-    \b
-      # Static with auto-refresh
-      afl-monitor-ng -s -w /path/to/sync_dir
-
-    \b
-      # Generate HTML report
-      afl-monitor-ng -h ./report /path/to/sync_dir
-
-    \b
-      # JSON output for automation
-      afl-monitor-ng -j stats.json /path/to/sync_dir
 
     \b
       # Interactive TUI controls:
@@ -102,12 +97,32 @@ def main(**kwargs):
         logging.basicConfig(level=logging.ERROR)
 
     # Determine mode
-    has_file_output = kwargs['html_dir'] or kwargs['json_file']
     wants_static = kwargs['static_output']
-    wants_interactive = kwargs['interactive_tui']
+    wants_web = kwargs['web_server']
+    wants_headless = kwargs['headless']
+
+    # Web server mode
+    if wants_web:
+        from .webserver import run_web_server
+        try:
+            asyncio.run(run_web_server(
+                findings_dir=Path(kwargs['findings_directory']),
+                port=kwargs['web_port'],
+                headless=wants_headless,
+                refresh_interval=kwargs['interval']
+            ))
+        except KeyboardInterrupt:
+            click.echo("\n\nShutting down...")
+        except Exception as e:
+            click.echo(f"\nError: {e}", err=True)
+            if kwargs['verbose']:
+                import traceback
+                traceback.print_exc()
+            sys.exit(1)
+        return
 
     # Default to interactive TUI if just a directory is provided
-    if not has_file_output and not wants_static:
+    if not wants_static:
         # Interactive TUI mode (default)
         from .tui import run_interactive_tui
         try:
@@ -125,19 +140,12 @@ def main(**kwargs):
             sys.exit(1)
         return
 
-    # Static output or file generation mode
+    # Static output mode
     config = create_config(**kwargs)
-
-    # If no output format specified, default to terminal
-    if not any([wants_static, kwargs['html_dir'], kwargs['json_file']]):
-        config.output_format = ['terminal']
 
     # Run monitor
     try:
-        if config.watch_mode:
-            asyncio.run(run_watch_mode(config))
-        else:
-            asyncio.run(run_once(config))
+        asyncio.run(run_once(config))
     except KeyboardInterrupt:
         click.echo("\n\nInterrupted by user")
         sys.exit(0)
@@ -151,22 +159,14 @@ def main(**kwargs):
 
 def create_config(**kwargs) -> MonitorConfig:
     """Create monitor configuration from CLI arguments."""
-    output_formats = []
-    if kwargs.get('static_output') or not any([kwargs.get('html_dir'), kwargs.get('json_file')]):
-        output_formats.append('terminal')
-    if kwargs.get('html_dir'):
-        output_formats.append('html')
-    if kwargs.get('json_file'):
-        output_formats.append('json')
-
     return MonitorConfig(
         findings_dir=Path(kwargs['findings_directory']),
-        output_format=output_formats,
-        html_dir=Path(kwargs['html_dir']) if kwargs.get('html_dir') else None,
-        json_file=Path(kwargs['json_file']) if kwargs.get('json_file') else None,
+        output_format=['terminal'],
+        html_dir=None,
+        json_file=None,
         verbose=kwargs.get('verbose', False),
         no_color=kwargs.get('no_color', False),
-        watch_mode=kwargs.get('watch_mode', False),
+        watch_mode=False,
         watch_interval=kwargs.get('interval', 5),
         execute_command=kwargs.get('execute_cmd'),
         show_dead=kwargs.get('show_dead', False),
@@ -187,20 +187,11 @@ async def run_once(config: MonitorConfig):
     # Get system info
     system_info = ProcessMonitor.get_system_info()
 
-    # Output
-    if 'terminal' in config.output_format:
-        terminal = TerminalOutput(config)
-        terminal.print_banner()
-        terminal.print_campaign_summary(summary, system_info)
-        terminal.print_fuzzer_details(all_stats, monitor)
-
-    if 'json' in config.output_format:
-        json_out = JSONOutput(config)
-        json_out.write_output(all_stats, summary, system_info)
-
-    if 'html' in config.output_format:
-        html_out = HTMLOutput(config)
-        html_out.write_output(all_stats, summary, monitor, system_info)
+    # Output to terminal
+    terminal = TerminalOutput(config)
+    terminal.print_banner()
+    terminal.print_campaign_summary(summary, system_info)
+    terminal.print_fuzzer_details(all_stats, monitor)
 
     # Execute command on new crashes
     if config.execute_command and summary.new_crashes > 0:
@@ -208,49 +199,6 @@ async def run_once(config: MonitorConfig):
 
     # Save current state
     monitor.save_current_state(summary)
-
-
-async def run_watch_mode(config: MonitorConfig):
-    """Run monitoring in watch mode with auto-refresh."""
-    monitor = AFLMonitor(config)
-    terminal = TerminalOutput(config) if 'terminal' in config.output_format else None
-
-    iteration = 0
-    while True:
-        # Load previous state
-        monitor.load_previous_state()
-
-        # Collect stats
-        all_stats, summary = monitor.collect_stats()
-        system_info = ProcessMonitor.get_system_info()
-
-        # Output
-        if terminal:
-            terminal.print_watch_header(get_timestamp())
-            terminal.print_campaign_summary(summary, system_info)
-            terminal.print_fuzzer_details(all_stats, monitor)
-
-            # Show next update time
-            click.echo(f"\n[Refreshing every {config.watch_interval} seconds. Press Ctrl+C to exit]")
-
-        if 'json' in config.output_format:
-            json_out = JSONOutput(config)
-            json_out.write_output(all_stats, summary, system_info)
-
-        if 'html' in config.output_format:
-            html_out = HTMLOutput(config)
-            html_out.write_output(all_stats, summary, monitor, system_info)
-
-        # Execute command on new crashes
-        if config.execute_command and summary.new_crashes > 0:
-            await execute_notification(config, summary, all_stats)
-
-        # Save state
-        monitor.save_current_state(summary)
-
-        # Wait for next iteration
-        iteration += 1
-        await asyncio.sleep(config.watch_interval)
 
 
 async def execute_notification(config: MonitorConfig, summary, all_stats):
