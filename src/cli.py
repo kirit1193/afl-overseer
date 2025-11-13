@@ -34,7 +34,7 @@ def setup_logging(verbose: bool):
 @click.option('--headless', is_flag=True, help='Run web server in headless mode (without TUI)')
 @click.option('-v', '--verbose', is_flag=True, help='Show detailed per-fuzzer statistics')
 @click.option('-n', '--no-color', is_flag=True, help='Disable colored output')
-@click.option('-i', '--interval', default=5, help='Refresh interval in seconds (default: 5)')
+@click.option('-i', '--interval', default=1, help='Refresh interval in seconds (default: 1)')
 @click.option('-d', '--show-dead', is_flag=True, help='Include dead fuzzers in output')
 @click.option('-m', '--minimal', is_flag=True, help='Minimal output mode')
 @click.option('-e', '--execute', 'execute_cmd', help='Execute command on new crash (pass stats via stdin)')

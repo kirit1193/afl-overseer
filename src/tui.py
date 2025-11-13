@@ -69,7 +69,7 @@ class SummaryPanel(Static):
         # Execution stats
         left_col.append(f"[#808080]   execs:[/#808080] {format_number(s.total_execs)}")
         if s.alive_fuzzers > 0:
-            left_col.append(f"[#808080]   speed:[/#808080] {format_speed(s.total_speed)} [dim]({format_speed(s.avg_speed_per_core)}/core)[/dim]")
+            left_col.append(f"[#808080]   speed:[/#808080] {format_speed(s.total_speed)} [dim]({format_speed(s.avg_speed_per_core)} /core)[/dim]")
 
         # Coverage - subtle yellow/orange for low coverage
         cov_color = "#5fd75f" if s.max_coverage > 10 else "#d7af5f" if s.max_coverage > 5 else "#af5f5f"
@@ -95,28 +95,27 @@ class SummaryPanel(Static):
         last_find_display = format_time_ago(s.last_find_time) if s.last_find_time > 0 else "never"
         left_col.append(f"[#808080]last find:[/#808080] {last_find_display}")
 
-        # Cycles without finds indicator - show per fuzzer - ALWAYS show if we have fuzzers
-        if s.total_fuzzers > 0:
-            if s.cycles_wo_finds and s.cycles_wo_finds != "N/A":
-                cwof_display = s.cycles_wo_finds
-                # Parse to determine color - look for highest value
-                try:
-                    cwof_values = [int(x) for x in s.cycles_wo_finds.split('/') if x.isdigit()]
-                    max_cwof = max(cwof_values) if cwof_values else 0
-                    cwof_color = "#d75f5f" if max_cwof > 50 else "#d7af5f" if max_cwof > 10 else "#808080"
-                except:
-                    cwof_color = "#808080"
-                left_col.append(f"[#808080] no finds:[/#808080] [{cwof_color}]{cwof_display}[/{cwof_color}] cycles")
-            else:
-                left_col.append(f"[#808080] no finds:[/#808080] [dim]N/A[/dim]")
+        # Cycles without finds indicator - ALWAYS show
+        if s.cycles_wo_finds and s.cycles_wo_finds != "N/A" and s.total_fuzzers > 0:
+            cwof_display = s.cycles_wo_finds
+            # Parse to determine color - look for highest value
+            try:
+                cwof_values = [int(x) for x in s.cycles_wo_finds.split('/') if x.isdigit()]
+                max_cwof = max(cwof_values) if cwof_values else 0
+                cwof_color = "#d75f5f" if max_cwof > 50 else "#d7af5f" if max_cwof > 10 else "#808080"
+            except:
+                cwof_color = "#808080"
+            left_col.append(f"[#808080] no finds:[/#808080] [{cwof_color}]{cwof_display}[/{cwof_color}] cycles")
+        else:
+            left_col.append(f"[#808080] no finds:[/#808080] [dim]N/A[/dim]")
 
         # RIGHT COLUMN - System info (right-aligned)
         if sys_info:
             right_col.append(f"[bold #808080]System[/bold #808080]")
             # Use text labels instead of icons for better compatibility
-            right_col.append(f"[#5f8787]CPU:[/#5f8787] {sys_info.get('cpu_percent', 0):.1f}% [dim]({sys_info.get('cpu_count', 0)} cores)[/dim]")
-            right_col.append(f"[#875f87]RAM:[/#875f87] {sys_info.get('memory_used_gb', 0):.1f}/{sys_info.get('memory_total_gb', 0):.1f} GB [dim]({sys_info.get('memory_percent', 0):.1f}%)[/dim]")
-            right_col.append(f"[#5f875f]DSK:[/#5f875f] {sys_info.get('disk_used_gb', 0):.0f}/{sys_info.get('disk_total_gb', 0):.0f} GB [dim]({sys_info.get('disk_percent', 0):.1f}%)[/dim]")
+            right_col.append(f"[#5f8787]CPU:[/#5f8787] {sys_info.get('cpu_percent', 0):.1f}%")
+            right_col.append(f"[#875f87]RAM:[/#875f87] {sys_info.get('memory_used_gb', 0):.1f}/{sys_info.get('memory_total_gb', 0):.1f} GB")
+            right_col.append(f"[#5f875f]DSK:[/#5f875f] {sys_info.get('disk_used_gb', 0):.0f}/{sys_info.get('disk_total_gb', 0):.0f} GB")
 
         # Combine columns side by side with proper alignment
         # Use Rich's Text object to properly handle markup and measure width
@@ -133,10 +132,10 @@ class SummaryPanel(Static):
                 left_text = RichText.from_markup(left)
                 right_text = RichText.from_markup(right)
 
-                # Calculate padding needed (assume 80 char width, right column at ~50)
+                # Calculate padding needed (assume 80 char width, right column at ~55)
                 left_width = len(left_text.plain)
                 right_width = len(right_text.plain)
-                target_right_pos = 50
+                target_right_pos = 55
 
                 if left_width < target_right_pos:
                     padding = " " * (target_right_pos - left_width)
@@ -401,7 +400,7 @@ class AFLMonitorApp(App):
     }
 
     SummaryPanel {
-        height: 10;
+        height: 14;
         background: #0f0f0f;
         border: solid #2a2a2a;
         padding: 1 2;
