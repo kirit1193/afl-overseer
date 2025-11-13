@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""
+AFL Monitor - Next Generation
+Modern monitoring and reporting tool for AFL/AFL++ fuzzing campaigns
+
+Copyright 2024. Licensed under the Apache License, Version 2.0.
+"""
+
+import sys
+import asyncio
+from pathlib import Path
+
+# Check Python version
+if sys.version_info < (3, 8):
+    print("Error: Python 3.8 or higher is required", file=sys.stderr)
+    sys.exit(1)
+
+from src.cli import main
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n\nInterrupted by user")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\nFatal error: {e}", file=sys.stderr)
+        sys.exit(1)

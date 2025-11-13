@@ -1,1 +1,3 @@
 /documentation/sample
+__pycache__/
+*.pyc
