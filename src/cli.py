@@ -29,13 +29,14 @@ def setup_logging(verbose: bool):
 
 @click.command()
 @click.argument('findings_directory', type=click.Path(exists=True, file_okay=False), required=False)
-@click.option('-c', '--terminal', 'output_terminal', is_flag=True, help='Output to terminal (default)')
+@click.option('-t', '--tui', 'interactive_tui', is_flag=True, help='Interactive TUI mode (like htop)')
+@click.option('-s', '--static', 'static_output', is_flag=True, help='Static terminal output (non-interactive)')
 @click.option('-h', '--html', 'html_dir', type=click.Path(), help='Generate HTML report in directory')
 @click.option('-j', '--json', 'json_file', type=click.Path(), help='Write JSON output to file')
 @click.option('-v', '--verbose', is_flag=True, help='Show detailed per-fuzzer statistics')
 @click.option('-n', '--no-color', is_flag=True, help='Disable colored output')
-@click.option('-w', '--watch', 'watch_mode', is_flag=True, help='Watch mode - refresh automatically')
-@click.option('-i', '--interval', default=5, help='Watch mode refresh interval in seconds (default: 5)')
+@click.option('-w', '--watch', 'watch_mode', is_flag=True, help='Watch mode - auto-refresh (for static output)')
+@click.option('-i', '--interval', default=5, help='Refresh interval in seconds (default: 5)')
 @click.option('-d', '--show-dead', is_flag=True, help='Include dead fuzzers in output')
 @click.option('-m', '--minimal', is_flag=True, help='Minimal output mode')
 @click.option('-e', '--execute', 'execute_cmd', help='Execute command on new crash (pass stats via stdin)')
@@ -49,11 +50,22 @@ def main(**kwargs):
     FINDINGS_DIRECTORY should point to the AFL sync directory containing
     one or more fuzzer instance subdirectories.
 
+    By default, starts interactive TUI mode (like htop). Use -s for static output.
+
     Examples:
 
     \b
-      # Basic terminal output with details
-      afl-monitor-ng -c -v /path/to/sync_dir
+      # Interactive TUI (default, like htop)
+      afl-monitor-ng /path/to/sync_dir
+      afl-monitor-ng -t /path/to/sync_dir
+
+    \b
+      # Static terminal output (one-time)
+      afl-monitor-ng -s /path/to/sync_dir
+
+    \b
+      # Static with auto-refresh
+      afl-monitor-ng -s -w /path/to/sync_dir
 
     \b
       # Generate HTML report
@@ -64,12 +76,13 @@ def main(**kwargs):
       afl-monitor-ng -j stats.json /path/to/sync_dir
 
     \b
-      # Watch mode with auto-refresh every 10 seconds
-      afl-monitor-ng -c -v -w -i 10 /path/to/sync_dir
-
-    \b
-      # Execute command on new crashes
-      afl-monitor-ng -c -e './notify.sh' /path/to/sync_dir
+      # Interactive TUI controls:
+      #   q - Quit
+      #   r - Refresh now
+      #   1/2/3 - Compact/Normal/Detailed view
+      #   n/s/c/e - Sort by Name/Speed/Coverage/Execs
+      #   d - Toggle dead fuzzers
+      #   p - Pause/Resume
     """
     if kwargs['version']:
         click.echo("AFL Monitor - Next Generation v2.0")
@@ -82,14 +95,41 @@ def main(**kwargs):
         sys.exit(2)
 
     # Setup
-    setup_logging(kwargs['verbose'])
+    # Only show logs if verbose, otherwise suppress
+    if kwargs['verbose']:
+        setup_logging(True)
+    else:
+        logging.basicConfig(level=logging.ERROR)
 
-    # Create config
+    # Determine mode
+    has_file_output = kwargs['html_dir'] or kwargs['json_file']
+    wants_static = kwargs['static_output']
+    wants_interactive = kwargs['interactive_tui']
+
+    # Default to interactive TUI if just a directory is provided
+    if not has_file_output and not wants_static:
+        # Interactive TUI mode (default)
+        from .tui import run_interactive_tui
+        try:
+            run_interactive_tui(
+                Path(kwargs['findings_directory']),
+                refresh_interval=kwargs['interval']
+            )
+        except KeyboardInterrupt:
+            pass
+        except Exception as e:
+            click.echo(f"\nError: {e}", err=True)
+            if kwargs['verbose']:
+                import traceback
+                traceback.print_exc()
+            sys.exit(1)
+        return
+
+    # Static output or file generation mode
     config = create_config(**kwargs)
 
-    # Validate
-    if not any([kwargs['output_terminal'], kwargs['html_dir'], kwargs['json_file']]):
-        # Default to terminal if nothing specified
+    # If no output format specified, default to terminal
+    if not any([wants_static, kwargs['html_dir'], kwargs['json_file']]):
         config.output_format = ['terminal']
 
     # Run monitor
@@ -112,7 +152,7 @@ def main(**kwargs):
 def create_config(**kwargs) -> MonitorConfig:
     """Create monitor configuration from CLI arguments."""
     output_formats = []
-    if kwargs.get('output_terminal') or not any([kwargs.get('html_dir'), kwargs.get('json_file')]):
+    if kwargs.get('static_output') or not any([kwargs.get('html_dir'), kwargs.get('json_file')]):
         output_formats.append('terminal')
     if kwargs.get('html_dir'):
         output_formats.append('html')

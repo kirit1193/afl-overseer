@@ -5,6 +5,7 @@
 click>=8.1.0              # Modern CLI framework
 rich>=13.0.0              # Beautiful terminal output
 psutil>=5.9.0             # Process and system monitoring
+textual>=0.40.0           # Interactive TUI framework
 
 # Optional dependencies for advanced features
 # Install with: pip install -r requirements.txt
