@@ -183,6 +183,74 @@ def calculate_eta(current: int, total: int, elapsed_seconds: int) -> str:
     return format_duration(remaining)
 
 
+def generate_sparkline(values: list, width: int = 20, height: int = 8) -> str:
+    """
+    Generate ASCII sparkline for a series of values.
+
+    Args:
+        values: List of numeric values
+        width: Number of characters for the sparkline
+        height: Number of vertical levels (1-8 for block characters)
+
+    Returns:
+        String representing the sparkline
+    """
+    if not values or len(values) == 0:
+        return " " * width
+
+    # Sample values if we have more than width
+    if len(values) > width:
+        step = len(values) / width
+        sampled = [values[int(i * step)] for i in range(width)]
+    else:
+        sampled = values + [values[-1]] * (width - len(values))  # Pad if needed
+
+    # Normalize to 0-height range
+    min_val = min(sampled)
+    max_val = max(sampled)
+
+    if max_val == min_val:
+        # All values are the same
+        normalized = [height // 2] * len(sampled)
+    else:
+        normalized = [int((v - min_val) / (max_val - min_val) * (height - 1)) for v in sampled]
+
+    # Block characters for sparkline (Unicode block elements)
+    blocks = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█']
+
+    # Build sparkline
+    sparkline = ''.join(blocks[min(n, len(blocks) - 1)] for n in normalized)
+
+    return sparkline
+
+
+def generate_mini_graph(values: list, width: int = 40, label: str = "") -> list:
+    """
+    Generate a mini text-based graph with values.
+
+    Args:
+        values: List of numeric values
+        width: Width of the graph
+        label: Label for the graph
+
+    Returns:
+        List of strings representing the graph lines
+    """
+    if not values or len(values) == 0:
+        return [f"{label}: [no data]"]
+
+    min_val = min(values)
+    max_val = max(values)
+    latest_val = values[-1]
+
+    sparkline = generate_sparkline(values, width=width)
+
+    # Format with min, max, and current values
+    info = f"{label}: {sparkline}  [min: {min_val:.1f}, max: {max_val:.1f}, now: {latest_val:.1f}]"
+
+    return [info]
+
+
 class ColorFormatter:
     """ANSI color codes for terminal output."""
 
