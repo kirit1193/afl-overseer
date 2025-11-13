@@ -956,68 +956,98 @@ class WebServer:
         return web.Response(text=html, content_type='text/html')
 
     async def handle_stats(self, request):
-        """API endpoint for fuzzer statistics."""
-        # Load previous state
-        self.monitor.load_previous_state()
+        """API endpoint for fuzzer statistics with error handling."""
+        try:
+            # Load previous state (non-critical)
+            try:
+                self.monitor.load_previous_state()
+            except Exception:
+                pass  # State loading is non-critical
 
-        # Collect statistics
-        all_stats, summary = self.monitor.collect_stats()
-        system_info = ProcessMonitor.get_system_info()
+            # Collect statistics
+            try:
+                all_stats, summary = self.monitor.collect_stats()
+            except Exception as e:
+                logging.error(f"Failed to collect stats: {e}")
+                return web.json_response(
+                    {'error': 'Failed to collect statistics', 'detail': str(e)},
+                    status=500
+                )
 
-        # Save state
-        self.monitor.save_current_state(summary)
-
-        # Format response
-        response_data = {
-            'summary': {
-                'alive_fuzzers': summary.alive_fuzzers,
-                'total_fuzzers': summary.total_fuzzers,
-                'total_execs': summary.total_execs,
-                'current_speed': summary.total_speed,
-                'avg_speed': summary.current_avg_speed,
-                'max_coverage': summary.max_coverage,
-                'avg_coverage': summary.max_coverage,
-                'total_crashes': summary.total_crashes,
-                'total_hangs': summary.total_hangs,
-                'corpus_count': summary.total_corpus,
-                'corpus_favored': 0,  # Calculate from all_stats
-                'pending_total': summary.total_pending,
-                'pending_favored': summary.total_pending_favs,
-                'avg_stability': summary.avg_stability,
-                'min_stability': summary.min_stability,
-                'max_stability': summary.max_stability,
-                'avg_cycle': summary.avg_cycle,
-                'max_cycle': summary.max_cycle,
-            },
-            'system': {
-                'cpu_cores': system_info['cpu_count'],
-                'cpu_percent': system_info['cpu_percent'],
-                'memory_total_gb': system_info['memory_total_gb'],
-                'memory_used_gb': system_info['memory_used_gb'],
-                'memory_percent': system_info['memory_percent'],
-            },
-            'fuzzers': [
-                {
-                    'name': stats.fuzzer_name,
-                    'status': stats.status.value if hasattr(stats.status, 'value') else str(stats.status),
-                    'run_time': stats.run_time,
-                    'execs_done': stats.execs_done,
-                    'exec_speed': stats.execs_per_sec,
-                    'bitmap_cvg': stats.bitmap_cvg,
-                    'saved_crashes': stats.saved_crashes,
-                    'saved_hangs': stats.saved_hangs,
-                    'corpus_count': stats.corpus_count,
-                    'stability': stats.stability,
-                    'cpu_percent': stats.cpu_usage,
-                    'memory_percent': stats.memory_usage,
-                    'slowest_exec_ms': stats.slowest_exec_ms,
-                    'exec_timeout': stats.exec_timeout,
+            # Get system info with fallback
+            try:
+                system_info = ProcessMonitor.get_system_info()
+            except Exception as e:
+                logging.warning(f"Failed to get system info: {e}")
+                system_info = {
+                    'cpu_count': 0, 'cpu_percent': 0,
+                    'memory_total_gb': 0, 'memory_used_gb': 0, 'memory_percent': 0
                 }
-                for stats in all_stats
-            ]
-        }
 
-        return web.json_response(response_data)
+            # Save state (non-critical)
+            try:
+                self.monitor.save_current_state(summary)
+            except Exception:
+                pass  # State saving is non-critical
+
+            # Format response
+            response_data = {
+                'summary': {
+                    'alive_fuzzers': summary.alive_fuzzers,
+                    'total_fuzzers': summary.total_fuzzers,
+                    'total_execs': summary.total_execs,
+                    'current_speed': summary.total_speed,
+                    'avg_speed': summary.current_avg_speed,
+                    'max_coverage': summary.max_coverage,
+                    'avg_coverage': summary.max_coverage,
+                    'total_crashes': summary.total_crashes,
+                    'total_hangs': summary.total_hangs,
+                    'corpus_count': summary.total_corpus,
+                    'corpus_favored': 0,  # Calculate from all_stats
+                    'pending_total': summary.total_pending,
+                    'pending_favored': summary.total_pending_favs,
+                    'avg_stability': summary.avg_stability,
+                    'min_stability': summary.min_stability,
+                    'max_stability': summary.max_stability,
+                    'avg_cycle': summary.avg_cycle,
+                    'max_cycle': summary.max_cycle,
+                },
+                'system': {
+                    'cpu_cores': system_info.get('cpu_count', 0),
+                    'cpu_percent': system_info.get('cpu_percent', 0),
+                    'memory_total_gb': system_info.get('memory_total_gb', 0),
+                    'memory_used_gb': system_info.get('memory_used_gb', 0),
+                    'memory_percent': system_info.get('memory_percent', 0),
+                },
+                'fuzzers': [
+                    {
+                        'name': stats.fuzzer_name,
+                        'status': stats.status.value if hasattr(stats.status, 'value') else str(stats.status),
+                        'run_time': stats.run_time,
+                        'execs_done': stats.execs_done,
+                        'exec_speed': stats.execs_per_sec,
+                        'bitmap_cvg': stats.bitmap_cvg,
+                        'saved_crashes': stats.saved_crashes,
+                        'saved_hangs': stats.saved_hangs,
+                        'corpus_count': stats.corpus_count,
+                        'stability': stats.stability,
+                        'cpu_percent': stats.cpu_usage,
+                        'memory_percent': stats.memory_usage,
+                        'slowest_exec_ms': stats.slowest_exec_ms,
+                        'exec_timeout': stats.exec_timeout,
+                    }
+                    for stats in all_stats
+                ]
+            }
+
+            return web.json_response(response_data)
+
+        except Exception as e:
+            logging.error(f"Unexpected error in stats endpoint: {e}")
+            return web.json_response(
+                {'error': 'Internal server error', 'detail': str(e)},
+                status=500
+            )
 
 
 async def run_web_server(
@@ -1050,24 +1080,40 @@ async def run_web_server(
         tui_thread = threading.Thread(target=run_tui, daemon=True)
         tui_thread.start()
 
-    # Start web server
-    runner = web.AppRunner(server.app)
-    await runner.setup()
-
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
-
-    print(f"\n🌐 AFL Overseer Dashboard")
-    print(f"   Local:    http://localhost:{port}")
-    print(f"   Network:  http://0.0.0.0:{port}")
-    print(f"   Mode:     {'Headless' if headless else 'With TUI'}")
-    print(f"   Refresh:  {refresh_interval}s\n")
-    print("Press Ctrl+C to stop...\n")
-
-    # Keep server running
+    # Start web server with error handling
     try:
-        await asyncio.Event().wait()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        await runner.cleanup()
+        runner = web.AppRunner(server.app)
+        await runner.setup()
+
+        try:
+            site = web.TCPSite(runner, '0.0.0.0', port)
+            await site.start()
+        except OSError as e:
+            if "Address already in use" in str(e) or "Errno 98" in str(e):
+                print(f"\n❌ Error: Port {port} is already in use")
+                print(f"   Try a different port with: -p <port_number>")
+                print(f"   Or stop the process using port {port}\n")
+            else:
+                print(f"\n❌ Error starting server: {e}\n")
+            await runner.cleanup()
+            return
+
+        print(f"\n🌐 AFL Overseer Dashboard")
+        print(f"   Local:    http://localhost:{port}")
+        print(f"   Network:  http://0.0.0.0:{port}")
+        print(f"   Mode:     {'Headless' if headless else 'With TUI'}")
+        print(f"   Refresh:  {refresh_interval}s\n")
+        print("Press Ctrl+C to stop...\n")
+
+        # Keep server running
+        try:
+            await asyncio.Event().wait()
+        except KeyboardInterrupt:
+            print("\n\nShutting down...\n")
+        finally:
+            await runner.cleanup()
+
+    except Exception as e:
+        logging.error(f"Failed to start web server: {e}")
+        print(f"\n❌ Fatal error: {e}\n")
+        raise

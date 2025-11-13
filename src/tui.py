@@ -302,7 +302,11 @@ class AFLMonitorApp(App):
             verbose=True,
         )
         self.monitor = AFLMonitor(self.config)
-        self.monitor.load_previous_state()
+        try:
+            self.monitor.load_previous_state()
+        except Exception:
+            # State loading failure is non-critical
+            pass
 
     def compose(self) -> ComposeResult:
         """Compose the UI."""
@@ -325,34 +329,54 @@ class AFLMonitorApp(App):
         self.call_later(self.refresh_data)
 
     async def refresh_data(self) -> None:
-        """Refresh fuzzer data."""
+        """Refresh fuzzer data with error handling."""
         if self.paused:
             return
 
-        # Collect stats
-        all_stats, summary = self.monitor.collect_stats()
-        system_info = ProcessMonitor.get_system_info()
+        try:
+            # Collect stats
+            all_stats, summary = self.monitor.collect_stats()
+            system_info = ProcessMonitor.get_system_info()
 
-        # Update summary panel
-        summary_panel = self.query_one("#summary", SummaryPanel)
-        summary_panel.update_summary(summary, system_info)
+            # Update summary panel
+            try:
+                summary_panel = self.query_one("#summary", SummaryPanel)
+                summary_panel.update_summary(summary, system_info)
+            except Exception as e:
+                self.notify(f"Failed to update summary: {e}", severity="error")
 
-        # Update fuzzers table
-        table = self.query_one("#fuzzers-table", FuzzersTable)
-        table.update_data(all_stats)
+            # Update fuzzers table
+            try:
+                table = self.query_one("#fuzzers-table", FuzzersTable)
+                table.update_data(all_stats)
+            except Exception as e:
+                self.notify(f"Failed to update table: {e}", severity="error")
 
-        # Update system info
-        system_text = self._format_system_info(system_info)
-        self.query_one("#system-info", Static).update(system_text)
+            # Update system info
+            try:
+                system_text = self._format_system_info(system_info)
+                self.query_one("#system-info", Static).update(system_text)
+            except Exception as e:
+                self.notify(f"Failed to update system info: {e}", severity="warning")
 
-        # Update detail info
-        detail_info = f"Detail Level: {self.detail_level.title()} | Sort: {table.sort_key.title()} | Refresh: {self.refresh_interval}s"
-        if self.paused:
-            detail_info += " | [yellow]PAUSED[/yellow]"
-        self.query_one("#detail-info", Static).update(detail_info)
+            # Update detail info
+            try:
+                detail_info = f"Detail Level: {self.detail_level.title()} | Sort: {table.sort_key.title()} | Refresh: {self.refresh_interval}s"
+                if self.paused:
+                    detail_info += " | [yellow]PAUSED[/yellow]"
+                self.query_one("#detail-info", Static).update(detail_info)
+            except Exception as e:
+                pass  # Non-critical
 
-        # Save state
-        self.monitor.save_current_state(summary)
+            # Save state
+            try:
+                self.monitor.save_current_state(summary)
+            except Exception as e:
+                # State saving is non-critical, just log it
+                pass
+
+        except Exception as e:
+            self.notify(f"Error refreshing data: {e}", severity="error")
 
     def _format_system_info(self, system_info: dict) -> str:
         """Format system information."""

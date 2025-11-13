@@ -96,7 +96,11 @@ class FuzzerStats:
         if isinstance(self.directory, str):
             self.directory = Path(self.directory)
         if isinstance(self.status, str):
-            self.status = FuzzerStatus(self.status)
+            try:
+                self.status = FuzzerStatus(self.status)
+            except ValueError:
+                # Invalid status value, default to UNKNOWN
+                self.status = FuzzerStatus.UNKNOWN
 
     @property
     def is_alive(self) -> bool:
