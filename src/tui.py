@@ -68,12 +68,14 @@ class SummaryPanel(Static):
 
         # Execution stats
         left_col.append(f"[#808080]   execs:[/#808080] {format_number(s.total_execs)}")
-        if s.alive_fuzzers > 0:
-            left_col.append(f"[#808080]   speed:[/#808080] {format_speed(s.total_speed)} [dim]({format_speed(s.avg_speed_per_core)} /core)[/dim]")
 
-        # Coverage - subtle yellow/orange for low coverage
+        # Coverage - subtle yellow/orange for low coverage (moved above speed)
         cov_color = "#5fd75f" if s.max_coverage > 10 else "#d7af5f" if s.max_coverage > 5 else "#af5f5f"
         left_col.append(f"[#808080]coverage:[/#808080] [{cov_color}]{format_percent(s.max_coverage)}[/{cov_color}]")
+
+        # Speed (moved below coverage)
+        if s.alive_fuzzers > 0:
+            left_col.append(f"[#808080]   speed:[/#808080] {format_speed(s.total_speed)} [dim]({format_speed(s.avg_speed_per_core)} /core)[/dim]")
 
         # Crashes and Hangs
         crash_color = "#d75f5f" if s.total_crashes > 0 else "#4e4e4e"
@@ -400,15 +402,16 @@ class AFLMonitorApp(App):
 
     Footer {
         background: #121212;
-        color: #606060;
+        color: #505050;
+        height: 1;
     }
 
     SummaryPanel {
-        height: 15;
+        height: 14;
         background: #0f0f0f;
         border: solid #2a2a2a;
-        padding: 1 2;
-        margin: 1;
+        padding: 0 2;
+        margin: 1 1 0 1;
     }
 
     FuzzersTable {
@@ -455,15 +458,13 @@ class AFLMonitorApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("r", "refresh", "Refresh Now"),
-        Binding("1", "detail_compact", "Compact View"),
-        Binding("2", "detail_normal", "Normal View"),
-        Binding("3", "detail_detailed", "Detailed View"),
+        Binding("1", "detail_compact", "Compact"),
+        Binding("2", "detail_normal", "Normal"),
+        Binding("3", "detail_detailed", "Detailed"),
         Binding("d", "toggle_dead", "Toggle Dead"),
-        Binding("p", "pause", "Pause/Resume"),
     ]
 
-    TITLE = "AFL Overseer - Interactive Dashboard"
+    TITLE = "AFL Overseer"
 
     detail_level = reactive(DetailLevel.NORMAL)
     paused = reactive(False)
@@ -572,19 +573,23 @@ class AFLMonitorApp(App):
         self.notify("Refreshing data...")
 
     def action_detail_compact(self) -> None:
-        """Switch to compact detail level."""
+        """Switch to compact detail level - show ONLY summary."""
         self.detail_level = DetailLevel.COMPACT
-        table = self.query_one("#fuzzers-table", FuzzersTable)
-        table.detail_level = self.detail_level
-        table.setup_columns()
-        table.update_data(table.fuzzer_data)
-        self.notify("Switched to Compact view")
+        # Hide table, detail info, and graphs in compact mode
+        self.query_one("#fuzzers-table").display = False
+        self.query_one("#detail-info").display = False
+        self.query_one("#graphs-panel").display = False
+        self.notify("Switched to Compact view (summary only)")
         # Trigger immediate refresh
         self.call_later(self.refresh_data)
 
     def action_detail_normal(self) -> None:
         """Switch to normal detail level."""
         self.detail_level = DetailLevel.NORMAL
+        # Show table and detail info, hide graphs
+        self.query_one("#fuzzers-table").display = True
+        self.query_one("#detail-info").display = True
+        self.query_one("#graphs-panel").display = False
         table = self.query_one("#fuzzers-table", FuzzersTable)
         table.detail_level = self.detail_level
         table.setup_columns()
@@ -596,6 +601,10 @@ class AFLMonitorApp(App):
     def action_detail_detailed(self) -> None:
         """Switch to detailed level."""
         self.detail_level = DetailLevel.DETAILED
+        # Show everything
+        self.query_one("#fuzzers-table").display = True
+        self.query_one("#detail-info").display = True
+        self.query_one("#graphs-panel").display = True
         table = self.query_one("#fuzzers-table", FuzzersTable)
         table.detail_level = self.detail_level
         table.setup_columns()
