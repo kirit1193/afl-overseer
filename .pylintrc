@@ -12,14 +12,24 @@ disable=
     C0114,  # missing-module-docstring
     C0115,  # missing-class-docstring
     C0116,  # missing-function-docstring
+    C0415,  # import-outside-toplevel (intentional lazy imports for performance)
+    E0401,  # import-error (dependencies installed in CI/CD, not always locally)
+    R0801,  # duplicate-code (testing files have similar patterns)
     R0902,  # too-many-instance-attributes
     R0903,  # too-few-public-methods
+    R0912,  # too-many-branches (CLI main function is complex by nature)
     R0913,  # too-many-arguments
     R0914,  # too-many-locals
     R0915,  # too-many-statements
     W0212,  # protected-access
     W0511,  # fixme/todo
+    W0612,  # unused-variable (some variables kept for clarity/future use)
+    W0613,  # unused-argument (callbacks may not use all parameters)
+    W0702,  # bare-except (intentional in specific error recovery cases)
+    W0718,  # broad-exception-caught (monitoring tool needs to catch all errors)
     W1203,  # logging-fstring-interpolation
+    W1309,  # f-string-without-interpolation
+    W1514,  # unspecified-encoding (UTF-8 is default, explicit now added)
     C0301,  # line-too-long (handled by black)
 
 [REPORTS]
