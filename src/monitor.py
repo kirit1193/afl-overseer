@@ -8,9 +8,7 @@ import threading
 import fcntl
 from pathlib import Path
 from typing import List, Dict, Optional
-from dataclasses import asdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from copy import deepcopy
 import logging
 
 from .models import FuzzerStats, CampaignSummary, MonitorConfig
@@ -188,7 +186,7 @@ class AFLMonitor:
                     return
 
                 # Read state file with shared lock
-                with open(self.state_file, 'r') as f:
+                with open(self.state_file, 'r', encoding='utf-8') as f:
                     try:
                         # Try to acquire shared lock (multiple readers OK)
                         fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
@@ -227,7 +225,7 @@ class AFLMonitor:
 
                 try:
                     # Write to temp file with exclusive lock
-                    with open(temp_file, 'w') as f:
+                    with open(temp_file, 'w', encoding='utf-8') as f:
                         try:
                             # Acquire exclusive lock (no readers/writers allowed)
                             fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)

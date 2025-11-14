@@ -3,9 +3,7 @@
 import sys
 import asyncio
 import logging
-import subprocess
 from pathlib import Path
-from typing import Optional
 
 import click
 
