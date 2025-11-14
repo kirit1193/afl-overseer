@@ -1,18 +1,25 @@
 """Process detection and system resource monitoring."""
 
+from __future__ import annotations
+
 import os
 import psutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Optional, Tuple
 from .models import FuzzerStatus
+from . import constants
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class ProcessMonitor:
-    """Monitor fuzzer processes and system resources."""
+    """Monitor fuzzer processes and system resources with thread-safe psutil access."""
+
+    # Class-level lock for psutil CPU calls (shared state in psutil)
+    _cpu_lock = threading.Lock()
 
     @staticmethod
     def check_process_status(
@@ -80,19 +87,19 @@ class ProcessMonitor:
             # Check for recent activity - if setup was modified very recently, assume starting
             import time
             age = time.time() - setup_file.stat().st_mtime
-            if age < 60:  # Consider starting if setup modified in last minute
+            if age < constants.FUZZER_STARTING_AGE_THRESHOLD:
                 return True
 
             # Optional: Try to find afl-fuzz process (can be slow, so only if recent)
-            # Only check if setup is fairly recent (< 5 minutes)
-            if age < 300:
+            # Only check if setup is fairly recent
+            if age < constants.FUZZER_STARTING_CHECK_WINDOW:
                 try:
                     # Use fuser with shorter timeout for faster checks
                     result = subprocess.run(
                         ['fuser', '-v', str(fuzzer_dir)],
                         capture_output=True,
                         text=True,
-                        timeout=0.5  # Reduced from 2 seconds
+                        timeout=constants.FUSER_TIMEOUT
                     )
                     if 'afl-fuzz' in result.stderr:
                         return True
@@ -107,13 +114,15 @@ class ProcessMonitor:
 
     @staticmethod
     def _get_process_resources(pid: int) -> Tuple[float, float]:
-        """Get CPU and memory usage for a process."""
+        """Get CPU and memory usage for a process (thread-safe)."""
         try:
             process = psutil.Process(pid)
 
             # Get CPU usage (percentage) - use interval=0 for instant cached reading
             # This is much faster than interval=0.1 which blocks for 100ms per process
-            cpu_percent = process.cpu_percent(interval=0)
+            # Thread-safe: psutil maintains internal state for CPU calculations
+            with ProcessMonitor._cpu_lock:
+                cpu_percent = process.cpu_percent(interval=0)
 
             # Get memory usage (percentage)
             mem_percent = process.memory_percent()
@@ -131,11 +140,13 @@ class ProcessMonitor:
 
     @staticmethod
     def get_system_info() -> dict:
-        """Get system resource information."""
+        """Get system resource information (thread-safe)."""
         try:
             cpu_count = psutil.cpu_count()
             # Use interval=0 for instant cached reading instead of blocking
-            cpu_percent = psutil.cpu_percent(interval=0)
+            # Thread-safe: psutil maintains internal state for CPU calculations
+            with ProcessMonitor._cpu_lock:
+                cpu_percent = psutil.cpu_percent(interval=0)
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
 
@@ -164,7 +175,7 @@ class ProcessValidator:
             return None
 
         timeout_ratio = (stats.total_tmout / stats.execs_done) * 100
-        if timeout_ratio >= 10:
+        if timeout_ratio >= constants.TIMEOUT_RATIO_THRESHOLD:
             return f"High timeout ratio: {timeout_ratio:.1f}%"
         return None
 
@@ -173,23 +184,23 @@ class ProcessValidator:
         """Check if execution speed is suspiciously low."""
         if stats.execs_per_sec == 0 and stats.execs_done > 0:
             return "No execution data yet"
-        elif stats.execs_per_sec < 100 and stats.execs_per_sec > 0:
+        elif stats.execs_per_sec < constants.LOW_EXEC_SPEED_THRESHOLD and stats.execs_per_sec > 0:
             return f"Slow execution: {stats.execs_per_sec:.1f} execs/sec"
         return None
 
     @staticmethod
     def check_cycles_without_finds(stats) -> Optional[str]:
         """Check cycles without finding new paths."""
-        if stats.cycles_wo_finds > 50:
+        if stats.cycles_wo_finds > constants.HIGH_CYCLES_WITHOUT_FINDS:
             return f"Many cycles without finds: {stats.cycles_wo_finds}"
-        elif stats.cycles_wo_finds > 10:
+        elif stats.cycles_wo_finds > constants.WARNING_CYCLES_WITHOUT_FINDS:
             return f"Cycles without finds: {stats.cycles_wo_finds}"
         return None
 
     @staticmethod
     def check_stability(stats) -> Optional[str]:
         """Check corpus stability."""
-        if stats.stability < 80:
+        if stats.stability < constants.LOW_STABILITY_THRESHOLD:
             return f"Low stability: {stats.stability:.1f}%"
         return None
 

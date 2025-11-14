@@ -920,7 +920,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
 class WebServer:
-    """Web server for AFL Overseer dashboard."""
+    """Web server for AFL Overseer dashboard with thread-safe request handling."""
 
     def __init__(self, findings_dir: Path, refresh_interval: int = 5):
         self.findings_dir = findings_dir
@@ -945,6 +945,9 @@ class WebServer:
 
         self.monitor = AFLMonitor(self.config)
 
+        # Async lock for thread-safe request handling (prevents concurrent stats collection)
+        self._stats_lock = asyncio.Lock()
+
     def setup_routes(self):
         """Setup web server routes."""
         self.app.router.add_get('/', self.handle_index)
@@ -956,98 +959,172 @@ class WebServer:
         return web.Response(text=html, content_type='text/html')
 
     async def handle_stats(self, request):
-        """API endpoint for fuzzer statistics with error handling."""
-        try:
-            # Load previous state (non-critical)
+        """
+        API endpoint for fuzzer statistics with thread-safe handling.
+        Uses async lock to prevent concurrent request interference.
+        """
+        # Acquire lock to prevent concurrent stats collection
+        async with self._stats_lock:
             try:
-                self.monitor.load_previous_state()
-            except Exception:
-                pass  # State loading is non-critical
+                # Load previous state (non-critical)
+                try:
+                    self.monitor.load_previous_state()
+                except Exception:
+                    pass  # State loading is non-critical
 
-            # Collect statistics
-            try:
-                all_stats, summary = self.monitor.collect_stats()
+                # Collect statistics (runs in thread pool, but protected by async lock)
+                try:
+                    loop = asyncio.get_event_loop()
+                    all_stats, summary = await loop.run_in_executor(
+                        None, self.monitor.collect_stats
+                    )
+                except Exception as e:
+                    logging.error(f"Failed to collect stats: {e}")
+                    return web.json_response(
+                        {'error': 'Failed to collect statistics', 'detail': str(e)},
+                        status=500
+                    )
+
+                # Get system info with fallback (run in executor to avoid blocking)
+                try:
+                    system_info = await loop.run_in_executor(
+                        None, ProcessMonitor.get_system_info
+                    )
+                except Exception as e:
+                    logging.warning(f"Failed to get system info: {e}")
+                    system_info = {
+                        'cpu_count': 0, 'cpu_percent': 0,
+                        'memory_total_gb': 0, 'memory_used_gb': 0, 'memory_percent': 0
+                    }
+
+                # Save state (non-critical)
+                try:
+                    self.monitor.save_current_state(summary)
+                except Exception:
+                    pass  # State saving is non-critical
+
+                # Format response
+                response_data = {
+                    'summary': {
+                        'alive_fuzzers': summary.alive_fuzzers,
+                        'total_fuzzers': summary.total_fuzzers,
+                        'total_execs': summary.total_execs,
+                        'current_speed': summary.total_speed,
+                        'avg_speed': summary.current_avg_speed,
+                        'max_coverage': summary.max_coverage,
+                        'avg_coverage': summary.max_coverage,
+                        'total_crashes': summary.total_crashes,
+                        'total_hangs': summary.total_hangs,
+                        'corpus_count': summary.total_corpus,
+                        'corpus_favored': 0,  # Calculate from all_stats
+                        'pending_total': summary.total_pending,
+                        'pending_favored': summary.total_pending_favs,
+                        'avg_stability': summary.avg_stability,
+                        'min_stability': summary.min_stability,
+                        'max_stability': summary.max_stability,
+                        'avg_cycle': summary.avg_cycle,
+                        'max_cycle': summary.max_cycle,
+                    },
+                    'system': {
+                        'cpu_cores': system_info.get('cpu_count', 0),
+                        'cpu_percent': system_info.get('cpu_percent', 0),
+                        'memory_total_gb': system_info.get('memory_total_gb', 0),
+                        'memory_used_gb': system_info.get('memory_used_gb', 0),
+                        'memory_percent': system_info.get('memory_percent', 0),
+                    },
+                    'fuzzers': [
+                        {
+                            'name': stats.fuzzer_name,
+                            'status': stats.status.value if hasattr(stats.status, 'value') else str(stats.status),
+                            'run_time': stats.run_time,
+                            'execs_done': stats.execs_done,
+                            'exec_speed': stats.execs_per_sec,
+                            'bitmap_cvg': stats.bitmap_cvg,
+                            'saved_crashes': stats.saved_crashes,
+                            'saved_hangs': stats.saved_hangs,
+                            'corpus_count': stats.corpus_count,
+                            'stability': stats.stability,
+                            'cpu_percent': stats.cpu_usage,
+                            'memory_percent': stats.memory_usage,
+                            'slowest_exec_ms': stats.slowest_exec_ms,
+                            'exec_timeout': stats.exec_timeout,
+                        }
+                        for stats in all_stats
+                    ]
+                }
+
+                return web.json_response(response_data)
+
             except Exception as e:
-                logging.error(f"Failed to collect stats: {e}")
+                logging.error(f"Unexpected error in stats endpoint: {e}")
                 return web.json_response(
-                    {'error': 'Failed to collect statistics', 'detail': str(e)},
+                    {'error': 'Internal server error', 'detail': str(e)},
                     status=500
                 )
 
-            # Get system info with fallback
-            try:
-                system_info = ProcessMonitor.get_system_info()
-            except Exception as e:
-                logging.warning(f"Failed to get system info: {e}")
-                system_info = {
-                    'cpu_count': 0, 'cpu_percent': 0,
-                    'memory_total_gb': 0, 'memory_used_gb': 0, 'memory_percent': 0
-                }
 
-            # Save state (non-critical)
-            try:
-                self.monitor.save_current_state(summary)
-            except Exception:
-                pass  # State saving is non-critical
+def _run_web_server_in_thread(findings_dir: Path, port: int, refresh_interval: int):
+    """Run web server in background thread with its own event loop."""
+    # Create new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
-            # Format response
-            response_data = {
-                'summary': {
-                    'alive_fuzzers': summary.alive_fuzzers,
-                    'total_fuzzers': summary.total_fuzzers,
-                    'total_execs': summary.total_execs,
-                    'current_speed': summary.total_speed,
-                    'avg_speed': summary.current_avg_speed,
-                    'max_coverage': summary.max_coverage,
-                    'avg_coverage': summary.max_coverage,
-                    'total_crashes': summary.total_crashes,
-                    'total_hangs': summary.total_hangs,
-                    'corpus_count': summary.total_corpus,
-                    'corpus_favored': 0,  # Calculate from all_stats
-                    'pending_total': summary.total_pending,
-                    'pending_favored': summary.total_pending_favs,
-                    'avg_stability': summary.avg_stability,
-                    'min_stability': summary.min_stability,
-                    'max_stability': summary.max_stability,
-                    'avg_cycle': summary.avg_cycle,
-                    'max_cycle': summary.max_cycle,
-                },
-                'system': {
-                    'cpu_cores': system_info.get('cpu_count', 0),
-                    'cpu_percent': system_info.get('cpu_percent', 0),
-                    'memory_total_gb': system_info.get('memory_total_gb', 0),
-                    'memory_used_gb': system_info.get('memory_used_gb', 0),
-                    'memory_percent': system_info.get('memory_percent', 0),
-                },
-                'fuzzers': [
-                    {
-                        'name': stats.fuzzer_name,
-                        'status': stats.status.value if hasattr(stats.status, 'value') else str(stats.status),
-                        'run_time': stats.run_time,
-                        'execs_done': stats.execs_done,
-                        'exec_speed': stats.execs_per_sec,
-                        'bitmap_cvg': stats.bitmap_cvg,
-                        'saved_crashes': stats.saved_crashes,
-                        'saved_hangs': stats.saved_hangs,
-                        'corpus_count': stats.corpus_count,
-                        'stability': stats.stability,
-                        'cpu_percent': stats.cpu_usage,
-                        'memory_percent': stats.memory_usage,
-                        'slowest_exec_ms': stats.slowest_exec_ms,
-                        'exec_timeout': stats.exec_timeout,
-                    }
-                    for stats in all_stats
-                ]
-            }
+    server = WebServer(findings_dir, refresh_interval)
 
-            return web.json_response(response_data)
+    async def _start_server():
+        runner = web.AppRunner(server.app)
+        await runner.setup()
 
-        except Exception as e:
-            logging.error(f"Unexpected error in stats endpoint: {e}")
-            return web.json_response(
-                {'error': 'Internal server error', 'detail': str(e)},
-                status=500
-            )
+        try:
+            site = web.TCPSite(runner, '0.0.0.0', port)
+            await site.start()
+
+            print(f"\nAFL Overseer Dashboard")
+            print(f"   Local:    http://localhost:{port}")
+            print(f"   Network:  http://0.0.0.0:{port}")
+            print(f"   Mode:     With TUI")
+            print(f"   Refresh:  {refresh_interval}s\n")
+
+            # Keep running until interrupted
+            await asyncio.Event().wait()
+        except OSError as e:
+            if "Address already in use" in str(e) or "Errno 98" in str(e):
+                print(f"\nError: Port {port} is already in use")
+                print(f"   Try a different port with: -p <port_number>")
+                print(f"   Or stop the process using port {port}\n")
+            else:
+                print(f"\nError starting server: {e}\n")
+        finally:
+            await runner.cleanup()
+
+    try:
+        loop.run_until_complete(_start_server())
+    except Exception as e:
+        logging.error(f"Web server error: {e}")
+    finally:
+        loop.close()
+
+
+def start_web_server_background(
+    findings_dir: Path,
+    port: int = 8080,
+    refresh_interval: int = 5
+) -> threading.Thread:
+    """
+    Start web server in a background thread.
+
+    Returns the thread object so caller can manage it.
+    """
+    web_thread = threading.Thread(
+        target=_run_web_server_in_thread,
+        args=(findings_dir, port, refresh_interval),
+        daemon=True
+    )
+    web_thread.start()
+    # Give web server a moment to start
+    import time
+    time.sleep(1)
+    return web_thread
 
 
 async def run_web_server(
@@ -1062,25 +1139,21 @@ async def run_web_server(
     Args:
         findings_dir: Path to AFL sync directory
         port: Port to run server on
-        headless: If True, run without TUI. If False, run TUI in background thread
+        headless: If True, run without TUI. If False, start web in background and signal to run TUI
         refresh_interval: Data refresh interval in seconds
     """
+    # If not headless, we can't run TUI from here due to async/signal issues
+    # Signal back to caller to handle TUI in main thread
+    if not headless:
+        # This should not be called - CLI should handle non-headless mode differently
+        raise RuntimeError(
+            "Non-headless mode must be handled by starting web server in background "
+            "and TUI in main thread. Use start_web_server_background() instead."
+        )
+
+    # Headless mode - run web server in main async context
     server = WebServer(findings_dir, refresh_interval)
 
-    # Start TUI in background thread if not headless
-    tui_thread = None
-    if not headless:
-        def run_tui():
-            try:
-                from .tui import run_interactive_tui
-                run_interactive_tui(findings_dir, refresh_interval)
-            except Exception as e:
-                logging.error(f"TUI error: {e}")
-
-        tui_thread = threading.Thread(target=run_tui, daemon=True)
-        tui_thread.start()
-
-    # Start web server with error handling
     try:
         runner = web.AppRunner(server.app)
         await runner.setup()
@@ -1101,11 +1174,11 @@ async def run_web_server(
         print(f"\nAFL Overseer Dashboard")
         print(f"   Local:    http://localhost:{port}")
         print(f"   Network:  http://0.0.0.0:{port}")
-        print(f"   Mode:     {'Headless' if headless else 'With TUI'}")
+        print(f"   Mode:     Headless")
         print(f"   Refresh:  {refresh_interval}s\n")
         print("Press Ctrl+C to stop...\n")
 
-        # Keep server running
+        # Keep server running in headless mode
         try:
             await asyncio.Event().wait()
         except KeyboardInterrupt:

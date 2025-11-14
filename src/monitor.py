@@ -1,32 +1,44 @@
 """Core monitoring logic for AFL fuzzing campaigns."""
 
+from __future__ import annotations
+
 import time
 import json
+import threading
+import fcntl
 from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import asdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from copy import deepcopy
 import logging
 
 from .models import FuzzerStats, CampaignSummary, MonitorConfig
 from .parser import FuzzerStatsParser, PlotDataParser, discover_fuzzers
 from .process import ProcessMonitor, ProcessValidator
+from . import constants
 
 logger = logging.getLogger(__name__)
 
 
 class AFLMonitor:
-    """Main AFL monitoring class."""
+    """Main AFL monitoring class with thread-safe state management."""
+
+    # Class-level lock for state file access (shared across all instances)
+    _state_file_lock = threading.Lock()
 
     def __init__(self, config: MonitorConfig):
         """Initialize monitor with configuration."""
         self.config = config
-        self.previous_summary: Optional[CampaignSummary] = None
-        self.state_file = Path.home() / ".afl-monitor-ng.json"
+        self._previous_summary: Optional[CampaignSummary] = None
+        self._summary_lock = threading.Lock()  # Instance lock for previous_summary
+        self.state_file = Path.home() / constants.STATE_FILE_NAME
+        self.state_lock_file = Path.home() / constants.STATE_LOCK_FILE_NAME
 
     def collect_stats(self) -> tuple[List[FuzzerStats], CampaignSummary]:
         """
         Collect statistics from all fuzzers using parallel processing.
+        Thread-safe implementation that avoids list mutation from multiple threads.
 
         Returns:
             Tuple of (fuzzer_stats_list, campaign_summary)
@@ -39,35 +51,29 @@ class AFLMonitor:
             return [], CampaignSummary()
 
         # Parse each fuzzer in parallel for better performance
-        all_stats: List[FuzzerStats] = []
-
-        # Use parallel processing if we have multiple fuzzers
         if len(fuzzer_dirs) > 1:
             # Limit workers to avoid overwhelming the system
-            max_workers = min(len(fuzzer_dirs), 10)
+            max_workers = min(len(fuzzer_dirs), constants.MAX_WORKER_THREADS)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all fuzzer collection tasks
-                future_to_dir = {
-                    executor.submit(self._collect_fuzzer_stats, fuzzer_dir): fuzzer_dir
+                # Submit all tasks and collect futures (no shared state mutation)
+                futures = [
+                    executor.submit(self._collect_fuzzer_stats, fuzzer_dir)
                     for fuzzer_dir in fuzzer_dirs
-                }
+                ]
 
-                # Collect results as they complete
-                for future in as_completed(future_to_dir):
+                # Collect results safely - each thread returns, main thread collects
+                all_stats = []
+                for future in as_completed(futures):
                     try:
                         stats = future.result()
-                        if stats:
-                            # Only add if alive or if showing dead fuzzers
-                            if stats.is_alive or self.config.show_dead:
-                                all_stats.append(stats)
+                        if stats and (stats.is_alive or self.config.show_dead):
+                            all_stats.append(stats)
                     except Exception as e:
-                        fuzzer_dir = future_to_dir[future]
-                        logger.error(f"Error collecting stats for {fuzzer_dir}: {e}")
+                        logger.error(f"Error collecting stats: {e}")
         else:
             # Single fuzzer, no need for threading
             stats = self._collect_fuzzer_stats(fuzzer_dirs[0])
-            if stats and (stats.is_alive or self.config.show_dead):
-                all_stats.append(stats)
+            all_stats = [stats] if stats and (stats.is_alive or self.config.show_dead) else []
 
         # Create summary
         summary = self._create_summary(all_stats)
@@ -138,10 +144,11 @@ class AFLMonitor:
         summary.total_crashes = sum(s.saved_crashes for s in all_stats)
         summary.total_hangs = sum(s.saved_hangs for s in all_stats)
 
-        # Calculate new crashes/hangs
-        if self.previous_summary:
-            summary.new_crashes = summary.total_crashes - self.previous_summary.total_crashes
-            summary.new_hangs = summary.total_hangs - self.previous_summary.total_hangs
+        # Calculate new crashes/hangs (thread-safe access)
+        with self._summary_lock:
+            if self._previous_summary:
+                summary.new_crashes = summary.total_crashes - self._previous_summary.total_crashes
+                summary.new_hangs = summary.total_hangs - self._previous_summary.total_hangs
 
         # Timing
         summary.total_runtime = sum(s.run_time for s in all_stats)
@@ -170,27 +177,80 @@ class AFLMonitor:
         return summary
 
     def load_previous_state(self):
-        """Load previous campaign state from file."""
+        """
+        Load previous campaign state from file with file-based locking.
+        Thread-safe across all AFLMonitor instances.
+        """
         try:
-            if self.state_file.exists():
+            # Use class-level lock for file access across all instances
+            with self._state_file_lock:
+                if not self.state_file.exists():
+                    return
+
+                # Read state file with shared lock
                 with open(self.state_file, 'r') as f:
-                    data = json.load(f)
-                    self.previous_summary = CampaignSummary(**data.get('summary', {}))
-                    logger.debug("Loaded previous state")
+                    try:
+                        # Try to acquire shared lock (multiple readers OK)
+                        fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+                        try:
+                            data = json.load(f)
+                            new_summary = CampaignSummary(**data.get('summary', {}))
+
+                            # Atomic update to instance variable
+                            with self._summary_lock:
+                                self._previous_summary = new_summary
+                            logger.debug("Loaded previous state")
+                        finally:
+                            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                    except BlockingIOError:
+                        logger.debug("State file locked by another process, skipping load")
         except Exception as e:
             logger.debug(f"Could not load previous state: {e}")
-            self.previous_summary = None
+            with self._summary_lock:
+                self._previous_summary = None
 
     def save_current_state(self, summary: CampaignSummary):
-        """Save current campaign state to file."""
+        """
+        Save current campaign state to file with atomic write and file locking.
+        Thread-safe across all AFLMonitor instances.
+        """
         try:
             data = {
                 'timestamp': int(time.time()),
                 'summary': summary.to_dict(),
             }
-            with open(self.state_file, 'w') as f:
-                json.dump(data, f, indent=2)
-            logger.debug("Saved current state")
+
+            # Use class-level lock for file access across all instances
+            with self._state_file_lock:
+                # Write to temporary file first (safer)
+                temp_file = self.state_file.with_suffix('.tmp')
+
+                try:
+                    # Write to temp file with exclusive lock
+                    with open(temp_file, 'w') as f:
+                        try:
+                            # Acquire exclusive lock (no readers/writers allowed)
+                            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            try:
+                                json.dump(data, f, indent=2)
+                                f.flush()
+                                # Atomic rename (POSIX guarantee)
+                                temp_file.replace(self.state_file)
+                                logger.debug("Saved current state")
+                            finally:
+                                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                        except BlockingIOError:
+                            logger.debug("State file locked by another process, skipping save")
+                            if temp_file.exists():
+                                temp_file.unlink()
+                except Exception as e:
+                    logger.error(f"Could not save state: {e}")
+                    # Clean up temp file on error
+                    if temp_file.exists():
+                        try:
+                            temp_file.unlink()
+                        except:
+                            pass
         except Exception as e:
             logger.error(f"Could not save state: {e}")
 
