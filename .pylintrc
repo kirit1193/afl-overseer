@@ -12,6 +12,8 @@ disable=
     C0114,  # missing-module-docstring
     C0115,  # missing-class-docstring
     C0116,  # missing-function-docstring
+    C0302,  # too-many-lines (webserver.py is large but functionally cohesive)
+    C0413,  # wrong-import-position (testing/benchmark files have intentional order)
     C0415,  # import-outside-toplevel (intentional lazy imports for performance)
     E0401,  # import-error (dependencies installed in CI/CD, not always locally)
     R0801,  # duplicate-code (testing files have similar patterns)
@@ -21,16 +23,19 @@ disable=
     R0913,  # too-many-arguments
     R0914,  # too-many-locals
     R0915,  # too-many-statements
+    R1705,  # no-else-return (acceptable code style preference)
+    W0201,  # attribute-defined-outside-init (acceptable in reactive frameworks)
     W0212,  # protected-access
     W0511,  # fixme/todo
     W0612,  # unused-variable (some variables kept for clarity/future use)
     W0613,  # unused-argument (callbacks may not use all parameters)
+    W0621,  # redefined-outer-name (acceptable in testing/benchmark files)
     W0702,  # bare-except (intentional in specific error recovery cases)
     W0718,  # broad-exception-caught (monitoring tool needs to catch all errors)
     W1203,  # logging-fstring-interpolation
     W1309,  # f-string-without-interpolation
+    W1510,  # subprocess-run-check (now explicitly set)
     W1514,  # unspecified-encoding (UTF-8 is default, explicit now added)
-    C0301,  # line-too-long (handled by black)
 
 [REPORTS]
 # Set the output format

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import re
+import logging
 from pathlib import Path
 from typing import List, Dict, Optional
-from .models import FuzzerStats, PlotDataPoint, FuzzerStatus
-import logging
+
+from .models import FuzzerStats, PlotDataPoint
 
 logger = logging.getLogger(__name__)
 
