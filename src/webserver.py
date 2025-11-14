@@ -71,27 +71,71 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .header {
             background: var(--bg-secondary);
             border-bottom: 2px solid var(--accent);
-            padding: 12px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding: 10px 20px 12px 20px;
             position: sticky;
             top: 0;
             z-index: 100;
             box-shadow: 0 2px 8px var(--shadow);
         }
 
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
         .header h1 {
             font-size: 18px;
             font-weight: 600;
             color: var(--accent);
+            margin: 0;
         }
 
         .header-info {
             display: flex;
-            gap: 20px;
+            gap: 12px;
             align-items: center;
             font-size: 12px;
+        }
+
+        .system-metrics {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .sys-metric {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .sys-metric-label {
+            font-weight: 500;
+            min-width: 30px;
+        }
+
+        .sys-metric-bar {
+            width: 60px;
+            height: 6px;
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sys-metric-fill {
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        .sys-metric-value {
+            min-width: 45px;
+            text-align: right;
         }
 
         .status-badge {
@@ -387,10 +431,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 grid-template-columns: repeat(2, 1fr);
             }
 
+            .header-top {
+                flex-wrap: wrap;
+            }
+
             .header-info {
-                flex-direction: column;
                 gap: 8px;
-                align-items: flex-end;
+                font-size: 11px;
+            }
+
+            .system-metrics {
+                gap: 12px;
+                font-size: 10px;
+            }
+
+            .sys-metric-bar {
+                width: 50px;
             }
 
             .container {
@@ -414,25 +470,66 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             .header h1 {
                 font-size: 16px;
             }
+
+            .header-top {
+                margin-bottom: 6px;
+            }
+
+            .system-metrics {
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .sys-metric {
+                gap: 4px;
+            }
+
+            .sys-metric-bar {
+                width: 40px;
+            }
+
+            .sys-metric-value {
+                min-width: 35px;
+                font-size: 10px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>AFL Overseer Dashboard</h1>
-        <div class="header-info">
-            <select id="refreshSelect" onchange="changeRefreshInterval()" style="background: var(--bg-tertiary); border: none; color: var(--text-primary); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                <option value="1">1s</option>
-                <option value="2">2s</option>
-                <option value="5">5s</option>
-                <option value="10">10s</option>
-                <option value="30">30s</option>
-            </select>
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
-                <span id="themeIcon">☀</span>
-            </button>
-            <div class="status-badge live">● LIVE</div>
-            <div id="lastUpdate" style="font-size: 11px;">Last update: --:--:--</div>
+        <div class="header-top">
+            <h1>AFL Overseer Dashboard</h1>
+            <div class="header-info">
+                <select id="refreshSelect" onchange="changeRefreshInterval()" style="background: var(--bg-tertiary); border: none; color: var(--text-primary); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                    <option value="1">1s</option>
+                    <option value="2">2s</option>
+                    <option value="5">5s</option>
+                    <option value="10">10s</option>
+                    <option value="30">30s</option>
+                </select>
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                    <span id="themeIcon">☀</span>
+                </button>
+                <div class="status-badge live">● LIVE</div>
+                <div id="lastUpdate" style="font-size: 11px;">Last update: --:--:--</div>
+            </div>
+        </div>
+        <div class="system-metrics">
+            <div class="sys-metric">
+                <span class="sys-metric-label">CPU:</span>
+                <div class="sys-metric-bar"><div class="sys-metric-fill" id="cpuBar" style="width: 0%"></div></div>
+                <span class="sys-metric-value" id="cpuText">0%</span>
+            </div>
+            <div class="sys-metric">
+                <span class="sys-metric-label">RAM:</span>
+                <div class="sys-metric-bar"><div class="sys-metric-fill" id="ramBar" style="width: 0%"></div></div>
+                <span class="sys-metric-value" id="ramText">0/0 GB</span>
+            </div>
+            <div class="sys-metric">
+                <span class="sys-metric-label">Disk:</span>
+                <div class="sys-metric-bar"><div class="sys-metric-fill" id="diskBar" style="width: 0%"></div></div>
+                <span class="sys-metric-value" id="diskText">0/0 GB</span>
+            </div>
         </div>
     </div>
 
@@ -510,13 +607,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="metric-subvalue" style="opacity: 0.6;">ago</div>
                 </div>
 
-                <!-- Cycles Without Finds -->
-                <div class="metric-card" id="cyclesWoCard">
-                    <div class="metric-label">No Finds</div>
-                    <div class="metric-value" id="cyclesWoFinds">N/A</div>
-                    <div class="metric-subvalue" style="opacity: 0.6;">cycles</div>
-                </div>
-
                 <!-- Cycles -->
                 <div class="metric-card">
                     <div class="metric-label">Cycles</div>
@@ -529,27 +619,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="metric-label">Stability</div>
                     <div class="metric-value" id="stability">0%</div>
                     <div class="metric-subvalue" id="stabilityRange">N/A</div>
-                </div>
-
-                <!-- CPU -->
-                <div class="metric-card">
-                    <div class="metric-label">CPU</div>
-                    <div class="metric-value" id="cpuUsage">0%</div>
-                    <div class="metric-subvalue"><span id="cpuCores">0</span> cores</div>
-                </div>
-
-                <!-- Memory -->
-                <div class="metric-card">
-                    <div class="metric-label">RAM</div>
-                    <div class="metric-value" id="memoryUsed">0 GB</div>
-                    <div class="metric-subvalue">of <span id="memoryTotal">0 GB</span></div>
-                </div>
-
-                <!-- Disk -->
-                <div class="metric-card">
-                    <div class="metric-label">Disk</div>
-                    <div class="metric-value" id="diskUsed">0 GB</div>
-                    <div class="metric-subvalue">of <span id="diskTotal">0 GB</span></div>
                 </div>
             </div>
         </div>
@@ -576,6 +645,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div id="graphs" class="tab-content">
+            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                <label style="font-size: 12px; color: var(--text-secondary);">Time Period:</label>
+                <select id="timePeriodSelect" onchange="changeTimePeriod()" style="background: var(--bg-tertiary); border: none; color: var(--text-primary); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                    <option value="all">All (Session)</option>
+                    <option value="60">Last 1 min</option>
+                    <option value="300">Last 5 min</option>
+                    <option value="600">Last 10 min</option>
+                    <option value="1800">Last 30 min</option>
+                    <option value="3600">Last 1 hour</option>
+                </select>
+            </div>
             <div class="chart-container">
                 <div class="chart-title">Execution Speed Over Time</div>
                 <div class="chart-wrapper">
@@ -611,10 +691,63 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let pathsData = [];
         let crashesData = [];
         let pendingData = [];
+        let timestamps = []; // Track data timestamps
         let maxDataPoints = 60;
+        let timePeriod = 'all'; // Default to showing all data
 
         // Refresh interval management
         let refreshIntervalId = null;
+
+        function changeTimePeriod() {
+            const select = document.getElementById('timePeriodSelect');
+            timePeriod = select.value;
+            localStorage.setItem('timePeriod', timePeriod);
+            updateChartsWithFilter();
+        }
+
+        function filterDataByTime(dataArray, timestampArray) {
+            if (timePeriod === 'all') {
+                return dataArray;
+            }
+
+            const period = parseInt(timePeriod);
+            const now = Date.now() / 1000;
+            const cutoff = now - period;
+
+            const filtered = [];
+            for (let i = 0; i < timestampArray.length; i++) {
+                if (timestampArray[i] >= cutoff) {
+                    filtered.push(dataArray[i]);
+                }
+            }
+            return filtered;
+        }
+
+        function updateChartsWithFilter() {
+            const filteredSpeed = filterDataByTime(speedData, timestamps);
+            const filteredCoverage = filterDataByTime(coverageData, timestamps);
+            const filteredPaths = filterDataByTime(pathsData, timestamps);
+            const filteredCrashes = filterDataByTime(crashesData, timestamps);
+            const filteredPending = filterDataByTime(pendingData, timestamps);
+
+            // Update chart data
+            speedChart.data.datasets[0].data = filteredSpeed;
+            speedChart.data.labels = Array(filteredSpeed.length).fill('');
+            speedChart.update('none');
+
+            coverageChart.data.datasets[0].data = filteredCoverage;
+            coverageChart.data.labels = Array(filteredCoverage.length).fill('');
+            coverageChart.update('none');
+
+            pathsChart.data.datasets[0].data = filteredPaths;
+            pathsChart.data.datasets[1].data = filteredCrashes;
+            pathsChart.data.labels = Array(filteredPaths.length).fill('');
+            pathsChart.update('none');
+
+            pendingChart.data.datasets[0].data = filteredPending;
+            pendingChart.data.labels = Array(filteredPending.length).fill('');
+            pendingChart.update('none');
+        }
 
         function changeRefreshInterval() {
             const select = document.getElementById('refreshSelect');
@@ -945,22 +1078,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const lastFindText = formatTimeAgo(summary.last_find_time);
             document.getElementById('lastFind').textContent = lastFindText === 'never' ? 'never' : lastFindText;
 
-            // Cycles without finds
-            const cyclesWoCard = document.getElementById('cyclesWoCard');
-            const cyclesWoFinds = summary.cycles_wo_finds;
-            document.getElementById('cyclesWoFinds').textContent = cyclesWoFinds || 'N/A';
-            // Color code based on severity
-            if (cyclesWoFinds && cyclesWoFinds !== 'N/A') {
-                const maxCycles = parseInt(cyclesWoFinds.split('/').pop() || '0');
-                if (maxCycles > 50) {
-                    cyclesWoCard.style.borderLeft = '3px solid var(--danger)';
-                } else if (maxCycles > 10) {
-                    cyclesWoCard.style.borderLeft = '3px solid var(--warning)';
-                } else {
-                    cyclesWoCard.style.borderLeft = 'none';
-                }
-            }
-
             // Cycles
             document.getElementById('avgCycle').textContent = summary.avg_cycle.toFixed(1);
             document.getElementById('maxCycle').textContent = summary.max_cycle;
@@ -970,13 +1087,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             document.getElementById('stabilityRange').textContent =
                 `${summary.min_stability.toFixed(1)}%-${summary.max_stability.toFixed(1)}%`;
 
-            // System metrics
-            document.getElementById('cpuCores').textContent = system.cpu_count;
-            document.getElementById('cpuUsage').textContent = system.cpu_percent.toFixed(1) + '%';
-            document.getElementById('memoryUsed').textContent = system.memory_used_gb.toFixed(1);
-            document.getElementById('memoryTotal').textContent = system.memory_total_gb.toFixed(1);
-            document.getElementById('diskUsed').textContent = (system.disk_used_gb || 0).toFixed(0);
-            document.getElementById('diskTotal').textContent = (system.disk_total_gb || 0).toFixed(0);
+            // Header system metrics with progress bars
+            const cpuPercent = Math.min(system.cpu_percent, 100);
+            document.getElementById('cpuBar').style.width = cpuPercent + '%';
+            document.getElementById('cpuText').textContent = system.cpu_percent.toFixed(1) + '%';
+
+            const memPercent = Math.min(system.memory_percent || 0, 100);
+            document.getElementById('ramBar').style.width = memPercent + '%';
+            document.getElementById('ramText').textContent =
+                `${system.memory_used_gb.toFixed(1)}/${system.memory_total_gb.toFixed(1)} GB`;
+
+            const diskPercent = Math.min(system.disk_percent || 0, 100);
+            document.getElementById('diskBar').style.width = diskPercent + '%';
+            document.getElementById('diskText').textContent =
+                `${(system.disk_used_gb || 0).toFixed(0)}/${(system.disk_total_gb || 0).toFixed(0)} GB`;
 
             // Fuzzers table
             const tbody = document.getElementById('fuzzersTable');
@@ -1000,39 +1124,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 </tr>
             `}).join('');
 
-            // Update charts
+            // Update charts with timestamp tracking
             const timestamp = new Date().toLocaleTimeString();
+            const unixTime = Math.floor(Date.now() / 1000);
+
             if (speedData.length >= maxDataPoints) {
                 speedData.shift();
                 coverageData.shift();
                 pathsData.shift();
                 crashesData.shift();
                 pendingData.shift();
-                speedChart.data.labels.shift();
+                timestamps.shift();
             }
 
-            speedData.push(summary.current_speed);
+            speedData.push(summary.total_speed);
             coverageData.push(summary.max_coverage);
-            pathsData.push(summary.corpus_count);
+            pathsData.push(summary.total_corpus);
             crashesData.push(summary.total_crashes);
-            pendingData.push(summary.pending_total);
+            pendingData.push(summary.total_pending);
+            timestamps.push(unixTime);
 
-            speedChart.data.labels.push(timestamp);
-            speedChart.data.datasets[0].data = speedData;
-            speedChart.update('none');
-
-            coverageChart.data.labels = speedChart.data.labels;
-            coverageChart.data.datasets[0].data = coverageData;
-            coverageChart.update('none');
-
-            pathsChart.data.labels = speedChart.data.labels;
-            pathsChart.data.datasets[0].data = pathsData;
-            pathsChart.data.datasets[1].data = crashesData;
-            pathsChart.update('none');
-
-            pendingChart.data.labels = speedChart.data.labels;
-            pendingChart.data.datasets[0].data = pendingData;
-            pendingChart.update('none');
+            // Apply time period filter and update charts
+            updateChartsWithFilter();
 
             // Update last update time
             document.getElementById('lastUpdate').textContent = 'Last update: ' + timestamp;
@@ -1048,7 +1161,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
-        // Load saved refresh interval
+        // Load saved preferences
         const savedInterval = localStorage.getItem('refreshInterval');
         if (savedInterval) {
             refreshInterval = parseInt(savedInterval);
@@ -1056,6 +1169,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         } else {
             // Set default from server
             document.getElementById('refreshSelect').value = refreshInterval;
+        }
+
+        const savedTimePeriod = localStorage.getItem('timePeriod');
+        if (savedTimePeriod) {
+            timePeriod = savedTimePeriod;
+            document.getElementById('timePeriodSelect').value = timePeriod;
         }
 
         // Initial fetch
