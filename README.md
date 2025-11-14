@@ -2,8 +2,11 @@
 
 Monitoring and visualization tool for AFL/AFL++ fuzzing campaigns.
 
+[![PyPI version](https://img.shields.io/pypi/v/afl-overseer.svg)](https://pypi.org/project/afl-overseer/)
+[![Python](https://img.shields.io/pypi/pyversions/afl-overseer.svg)](https://pypi.org/project/afl-overseer/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
 ## Overview
 
@@ -38,7 +41,19 @@ Standard AFL metrics plus AFL++ extensions:
 - Python 3.8+
 - Linux, macOS, or WSL2
 
-### Using a Virtual Environment
+### From PyPI (Recommended)
+
+```bash
+# Install from PyPI
+pip install afl-overseer
+
+# Run directly
+afl-overseer /path/to/sync_dir
+```
+
+### From Source
+
+#### Using a Virtual Environment
 
 ```bash
 git clone https://github.com/kirit1193/afl-overseer.git
@@ -300,6 +315,37 @@ Check directory structure:
 
 Use: `afl-overseer /sync_dir` (not `/sync_dir/fuzzer01`)
 
+## Security
+
+AFL Overseer is designed with security as a primary consideration and is **safe to expose to the internet** with proper network controls.
+
+### Security Features
+
+- ✅ **Read-Only Design** - Zero user input, no forms, no file uploads
+- ✅ **GET Requests Only** - All HTTP endpoints are read-only
+- ✅ **No Attack Surface** - No POST/PUT/DELETE, no query parameters processed
+- ✅ **Static Content** - No XSS, CSRF, SQL injection, or command injection vectors
+- ✅ **Thread-Safe** - Proper locking mechanisms prevent race conditions
+- ✅ **Secure Dependencies** - Well-maintained, popular libraries only
+- ✅ **No Authentication Needed** - Stateless, read-only monitoring
+
+### Security Audits
+
+The codebase undergoes automated security scanning:
+- **Static Analysis**: pylint, flake8, mypy
+- **Security Scanning**: bandit (SAST), Trivy (vulnerability scanner)
+- **Dependency Checking**: safety, automated updates
+
+See [SECURITY.md](SECURITY.md) for detailed security information and best practices.
+
+### Recommended Deployment
+
+While designed to be secure, we recommend:
+1. **Network Controls**: Limit access via firewall/VPN
+2. **Reverse Proxy**: Use nginx with rate limiting and SSL
+3. **Monitoring**: Log access patterns
+4. **Updates**: Keep dependencies current
+
 ## Project History
 
 AFL Overseer is a rewrite of the original [afl-monitor](https://github.com/reflare/afl-monitor) tool by Paul S. Ziegler. This version addresses security issues in the Python 2.7 codebase (unsafe pickle usage, deprecated modules) and adds support for AFL++ 4.x features, interactive TUI, and web dashboard capabilities.
@@ -316,7 +362,7 @@ Thanks to Paul S. Ziegler for the original afl-monitor.
 
 ## License
 
-Copyright (c) 2024 AFL Overseer Contributors. Licensed under the MIT License.
+Copyright (c) 2024 kirit1193. Licensed under the MIT License.
 
 Original afl-monitor: Copyright (c) 2017 Paul S. Ziegler, Reflare Ltd. (Apache License 2.0)
 
