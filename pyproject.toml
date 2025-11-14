@@ -9,10 +9,10 @@ description = "Monitoring and visualization tool for AFL/AFL++ fuzzing campaigns
 readme = "README.md"
 license = "MIT"
 authors = [
-    {name = "AFL Overseer Contributors"}
+    {name = "kirit1193", email = "kirit1193@users.noreply.github.com"}
 ]
 maintainers = [
-    {name = "AFL Overseer Contributors"}
+    {name = "kirit1193", email = "kirit1193@users.noreply.github.com"}
 ]
 keywords = [
     "afl",

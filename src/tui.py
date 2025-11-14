@@ -352,7 +352,7 @@ class GraphPanel(Static):
             sparkline = generate_sparkline(sampled, width=graph_width)
             avg_speed = sum(sampled) / len(sampled)
             output.append(
-                f"  [dim #606060]Execution speed:[/dim #606060]  [#5fd75f]{sparkline}[/#5fd75f]  "
+                f"[dim #606060]Speed:[/dim #606060]  [#5fd75f]{sparkline}[/#5fd75f]  "
                 f"[dim]avg: {avg_speed:.0f}/s[/dim]\n"
             )
 
