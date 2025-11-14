@@ -123,9 +123,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         .container {
-            max-width: 1600px;
+            max-width: 1800px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 15px;
         }
 
         .alerts {
@@ -208,52 +208,55 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 25px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
         }
 
         .metric-card {
             background: var(--bg-secondary);
-            padding: 15px;
-            border-radius: 8px;
+            padding: 10px 12px;
+            border-radius: 6px;
             border: 1px solid var(--border);
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.2s;
         }
 
         .metric-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px var(--shadow);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px var(--shadow);
+            border-color: var(--accent);
         }
 
         .metric-card.warning {
             border-color: var(--warning);
-            background: rgba(255, 170, 0, 0.05);
+            background: rgba(255, 170, 0, 0.08);
         }
 
         .metric-card.danger {
             border-color: var(--danger);
-            background: rgba(255, 68, 68, 0.05);
+            background: rgba(255, 68, 68, 0.08);
         }
 
         .metric-label {
-            font-size: 11px;
+            font-size: 10px;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
+            font-weight: 500;
         }
 
         .metric-value {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 600;
             color: var(--text-primary);
+            line-height: 1.2;
         }
 
         .metric-subvalue {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-secondary);
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         .metric-trend {
@@ -418,10 +421,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="header">
         <h1>AFL Overseer Dashboard</h1>
         <div class="header-info">
-            <button class="theme-toggle" onclick="toggleTheme()">Theme</button>
+            <select id="refreshSelect" onchange="changeRefreshInterval()" style="background: var(--bg-tertiary); border: none; color: var(--text-primary); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                <option value="1">1s</option>
+                <option value="2">2s</option>
+                <option value="5">5s</option>
+                <option value="10">10s</option>
+                <option value="30">30s</option>
+            </select>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                <span id="themeIcon">☀</span>
+            </button>
             <div class="status-badge live">● LIVE</div>
-            <div id="lastUpdate">Last update: --:--:--</div>
-            <div>Refresh: <span id="refreshInterval">5</span>s</div>
+            <div id="lastUpdate" style="font-size: 11px;">Last update: --:--:--</div>
         </div>
     </div>
 
@@ -432,40 +443,113 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <button class="tab active" onclick="switchTab('overview')">Overview</button>
             <button class="tab" onclick="switchTab('fuzzers')">Fuzzers</button>
             <button class="tab" onclick="switchTab('graphs')">Graphs</button>
-            <button class="tab" onclick="switchTab('system')">System</button>
         </div>
 
         <div id="overview" class="tab-content active">
-            <div class="metrics-grid">
+            <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                <!-- Fuzzer Status -->
                 <div class="metric-card" id="aliveFuzzersCard">
-                    <div class="metric-label">Active Fuzzers</div>
+                    <div class="metric-label">Fuzzers</div>
                     <div class="metric-value" id="aliveFuzzers">0</div>
-                    <div class="metric-subvalue">of <span id="totalFuzzers">0</span> total</div>
+                    <div class="metric-subvalue" id="fuzzerStatus">0 total</div>
                 </div>
+
+                <!-- Runtime -->
                 <div class="metric-card">
-                    <div class="metric-label">Total Executions</div>
-                    <div class="metric-value" id="totalExecs">0</div>
-                    <div class="metric-subvalue"><span id="execsPerSec">0</span>/sec</div>
+                    <div class="metric-label">Runtime</div>
+                    <div class="metric-value" id="totalRuntime">0s</div>
+                    <div class="metric-subvalue" style="opacity: 0.6;">cumulative</div>
                 </div>
+
+                <!-- Execution Speed -->
+                <div class="metric-card">
+                    <div class="metric-label">Speed</div>
+                    <div class="metric-value" id="totalSpeed">0</div>
+                    <div class="metric-subvalue"><span id="avgSpeedPerCore">0</span> /core</div>
+                </div>
+
+                <!-- Total Executions -->
+                <div class="metric-card">
+                    <div class="metric-label">Execs</div>
+                    <div class="metric-value" id="totalExecs">0</div>
+                    <div class="metric-subvalue" style="opacity: 0.6;">total</div>
+                </div>
+
+                <!-- Coverage -->
                 <div class="metric-card">
                     <div class="metric-label">Coverage</div>
                     <div class="metric-value" id="coverage">0%</div>
                     <div class="progress-bar"><div class="progress-fill" id="coverageBar" style="width: 0%"></div></div>
                 </div>
+
+                <!-- Crashes & Hangs -->
                 <div class="metric-card">
-                    <div class="metric-label">Crashes Found</div>
+                    <div class="metric-label">Crashes</div>
                     <div class="metric-value" id="crashes">0</div>
-                    <div class="metric-subvalue"><span id="hangs">0</span> hangs</div>
+                    <div class="metric-subvalue"><span id="hangs">0</span> hangs <span id="newFindings"></span></div>
                 </div>
+
+                <!-- Corpus -->
                 <div class="metric-card">
-                    <div class="metric-label">Corpus Size</div>
+                    <div class="metric-label">Corpus</div>
                     <div class="metric-value" id="corpusAll">0</div>
-                    <div class="metric-subvalue"><span id="corpusFavs">0</span> favored</div>
+                    <div class="metric-subvalue" style="opacity: 0.6;">paths</div>
                 </div>
+
+                <!-- Pending Paths -->
                 <div class="metric-card">
-                    <div class="metric-label">Pending Paths</div>
+                    <div class="metric-label">Pending</div>
                     <div class="metric-value" id="pendingAll">0</div>
-                    <div class="metric-subvalue"><span id="pendingFavs">0</span> favored</div>
+                    <div class="metric-subvalue"><span id="pendingFavs">0</span> favs</div>
+                </div>
+
+                <!-- Last Find -->
+                <div class="metric-card">
+                    <div class="metric-label">Last Find</div>
+                    <div class="metric-value" id="lastFind" style="font-size: 16px;">never</div>
+                    <div class="metric-subvalue" style="opacity: 0.6;">ago</div>
+                </div>
+
+                <!-- Cycles Without Finds -->
+                <div class="metric-card" id="cyclesWoCard">
+                    <div class="metric-label">No Finds</div>
+                    <div class="metric-value" id="cyclesWoFinds">N/A</div>
+                    <div class="metric-subvalue" style="opacity: 0.6;">cycles</div>
+                </div>
+
+                <!-- Cycles -->
+                <div class="metric-card">
+                    <div class="metric-label">Cycles</div>
+                    <div class="metric-value" id="avgCycle">0</div>
+                    <div class="metric-subvalue">max: <span id="maxCycle">0</span></div>
+                </div>
+
+                <!-- Stability -->
+                <div class="metric-card">
+                    <div class="metric-label">Stability</div>
+                    <div class="metric-value" id="stability">0%</div>
+                    <div class="metric-subvalue" id="stabilityRange">N/A</div>
+                </div>
+
+                <!-- CPU -->
+                <div class="metric-card">
+                    <div class="metric-label">CPU</div>
+                    <div class="metric-value" id="cpuUsage">0%</div>
+                    <div class="metric-subvalue"><span id="cpuCores">0</span> cores</div>
+                </div>
+
+                <!-- Memory -->
+                <div class="metric-card">
+                    <div class="metric-label">RAM</div>
+                    <div class="metric-value" id="memoryUsed">0 GB</div>
+                    <div class="metric-subvalue">of <span id="memoryTotal">0 GB</span></div>
+                </div>
+
+                <!-- Disk -->
+                <div class="metric-card">
+                    <div class="metric-label">Disk</div>
+                    <div class="metric-value" id="diskUsed">0 GB</div>
+                    <div class="metric-subvalue">of <span id="diskTotal">0 GB</span></div>
                 </div>
             </div>
         </div>
@@ -518,31 +602,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
 
-        <div id="system" class="tab-content">
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <div class="metric-label">CPU Cores</div>
-                    <div class="metric-value" id="cpuCores">0</div>
-                    <div class="metric-subvalue"><span id="cpuUsage">0</span>% used</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Memory</div>
-                    <div class="metric-value" id="memoryUsed">0 GB</div>
-                    <div class="metric-subvalue">of <span id="memoryTotal">0 GB</span></div>
-                    <div class="progress-bar"><div class="progress-fill" id="memoryBar" style="width: 0%"></div></div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Avg Cycle</div>
-                    <div class="metric-value" id="avgCycle">0</div>
-                    <div class="metric-subvalue">Max: <span id="maxCycle">0</span></div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Avg Stability</div>
-                    <div class="metric-value" id="stability">0%</div>
-                    <div class="metric-subvalue">Range: <span id="stabilityRange">N/A</span></div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <script>
@@ -554,6 +613,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let pendingData = [];
         let maxDataPoints = 60;
 
+        // Refresh interval management
+        let refreshIntervalId = null;
+
+        function changeRefreshInterval() {
+            const select = document.getElementById('refreshSelect');
+            refreshInterval = parseInt(select.value);
+            localStorage.setItem('refreshInterval', refreshInterval);
+
+            // Clear and restart interval
+            if (refreshIntervalId) {
+                clearInterval(refreshIntervalId);
+            }
+            refreshIntervalId = setInterval(fetchData, refreshInterval * 1000);
+        }
+
         // Theme management
         function toggleTheme() {
             const root = document.documentElement;
@@ -562,6 +636,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             root.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
 
+            // Update icon
+            document.getElementById('themeIcon').textContent = newTheme === 'dark' ? '☀' : '☾';
+
             // Update chart colors
             updateChartTheme(newTheme);
         }
@@ -569,6 +646,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function loadTheme() {
             const savedTheme = localStorage.getItem('theme') || 'dark';
             document.documentElement.setAttribute('data-theme', savedTheme);
+            // Update icon based on loaded theme
+            document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '☀' : '☾';
         }
 
         function getComputedColor(variable) {
@@ -744,6 +823,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             return `${s}s`;
         }
 
+        function formatTimeAgo(timestamp) {
+            if (!timestamp || timestamp <= 0) return 'never';
+
+            const now = Math.floor(Date.now() / 1000);
+            const elapsed = now - timestamp;
+
+            if (elapsed < 0) return 'in future';
+            if (elapsed < 60) return `${elapsed}s`;
+            if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
+            if (elapsed < 86400) return `${Math.floor(elapsed / 3600)}h`;
+            return `${Math.floor(elapsed / 86400)}d`;
+        }
+
         function updateAlerts(data) {
             const alertsDiv = document.getElementById('alerts');
             const alerts = [];
@@ -802,8 +894,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             // Update alerts
             updateAlerts(data);
 
-            // Overview metrics
-            const deadCount = summary.total_fuzzers - summary.alive_fuzzers;
+            // Fuzzer status with warnings
+            const deadCount = summary.dead_fuzzers || 0;
+            const startingCount = summary.starting_fuzzers || 0;
             const aliveFuzzersCard = document.getElementById('aliveFuzzersCard');
 
             if (deadCount > 0) {
@@ -813,29 +906,77 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
 
             document.getElementById('aliveFuzzers').textContent = summary.alive_fuzzers;
-            document.getElementById('totalFuzzers').textContent = summary.total_fuzzers;
+            let statusText = `${summary.total_fuzzers} total`;
+            if (deadCount > 0) statusText += `, ${deadCount} dead`;
+            if (startingCount > 0) statusText += `, ${startingCount} starting`;
+            document.getElementById('fuzzerStatus').textContent = statusText;
+
+            // Runtime
+            document.getElementById('totalRuntime').textContent = formatTime(summary.total_runtime || 0);
+
+            // Execution speed
+            document.getElementById('totalSpeed').textContent = formatNumber(summary.total_speed.toFixed(0)) + '/s';
+            document.getElementById('avgSpeedPerCore').textContent = (summary.avg_speed_per_core || 0).toFixed(0) + '/s';
+
+            // Total executions
             document.getElementById('totalExecs').textContent = formatNumber(summary.total_execs);
-            document.getElementById('execsPerSec').textContent = summary.current_speed.toFixed(0);
+
+            // Coverage
             document.getElementById('coverage').textContent = summary.max_coverage.toFixed(1) + '%';
-            document.getElementById('coverageBar').style.width = summary.max_coverage + '%';
+            document.getElementById('coverageBar').style.width = Math.min(summary.max_coverage, 100) + '%';
+
+            // Crashes & Hangs with new findings
             document.getElementById('crashes').textContent = summary.total_crashes;
             document.getElementById('hangs').textContent = summary.total_hangs;
-            document.getElementById('corpusAll').textContent = summary.corpus_count;
-            document.getElementById('corpusFavs').textContent = summary.corpus_favored;
-            document.getElementById('pendingAll').textContent = summary.pending_total;
-            document.getElementById('pendingFavs').textContent = summary.pending_favored;
+            let newFindingsText = '';
+            if (summary.new_crashes > 0) newFindingsText += `(+${summary.new_crashes}!)`;
+            if (summary.new_hangs > 0) newFindingsText += ` (+${summary.new_hangs} hangs!)`;
+            document.getElementById('newFindings').innerHTML = newFindingsText ?
+                `<span style="color: var(--danger); font-weight: 600;">${newFindingsText}</span>` : '';
 
-            // System metrics
-            document.getElementById('cpuCores').textContent = system.cpu_cores;
-            document.getElementById('cpuUsage').textContent = system.cpu_percent.toFixed(1);
-            document.getElementById('memoryUsed').textContent = system.memory_used_gb.toFixed(1);
-            document.getElementById('memoryTotal').textContent = system.memory_total_gb.toFixed(1);
-            document.getElementById('memoryBar').style.width = system.memory_percent + '%';
+            // Corpus
+            document.getElementById('corpusAll').textContent = formatNumber(summary.total_corpus);
+
+            // Pending paths
+            document.getElementById('pendingAll').textContent = formatNumber(summary.total_pending);
+            document.getElementById('pendingFavs').textContent = summary.total_pending_favs;
+
+            // Last find
+            const lastFindText = formatTimeAgo(summary.last_find_time);
+            document.getElementById('lastFind').textContent = lastFindText === 'never' ? 'never' : lastFindText;
+
+            // Cycles without finds
+            const cyclesWoCard = document.getElementById('cyclesWoCard');
+            const cyclesWoFinds = summary.cycles_wo_finds;
+            document.getElementById('cyclesWoFinds').textContent = cyclesWoFinds || 'N/A';
+            // Color code based on severity
+            if (cyclesWoFinds && cyclesWoFinds !== 'N/A') {
+                const maxCycles = parseInt(cyclesWoFinds.split('/').pop() || '0');
+                if (maxCycles > 50) {
+                    cyclesWoCard.style.borderLeft = '3px solid var(--danger)';
+                } else if (maxCycles > 10) {
+                    cyclesWoCard.style.borderLeft = '3px solid var(--warning)';
+                } else {
+                    cyclesWoCard.style.borderLeft = 'none';
+                }
+            }
+
+            // Cycles
             document.getElementById('avgCycle').textContent = summary.avg_cycle.toFixed(1);
             document.getElementById('maxCycle').textContent = summary.max_cycle;
+
+            // Stability
             document.getElementById('stability').textContent = summary.avg_stability.toFixed(1) + '%';
             document.getElementById('stabilityRange').textContent =
-                `${summary.min_stability || 0}% - ${summary.max_stability || 0}%`;
+                `${summary.min_stability.toFixed(1)}%-${summary.max_stability.toFixed(1)}%`;
+
+            // System metrics
+            document.getElementById('cpuCores').textContent = system.cpu_count;
+            document.getElementById('cpuUsage').textContent = system.cpu_percent.toFixed(1) + '%';
+            document.getElementById('memoryUsed').textContent = system.memory_used_gb.toFixed(1);
+            document.getElementById('memoryTotal').textContent = system.memory_total_gb.toFixed(1);
+            document.getElementById('diskUsed').textContent = (system.disk_used_gb || 0).toFixed(0);
+            document.getElementById('diskTotal').textContent = (system.disk_total_gb || 0).toFixed(0);
 
             // Fuzzers table
             const tbody = document.getElementById('fuzzersTable');
@@ -907,12 +1048,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
+        // Load saved refresh interval
+        const savedInterval = localStorage.getItem('refreshInterval');
+        if (savedInterval) {
+            refreshInterval = parseInt(savedInterval);
+            document.getElementById('refreshSelect').value = refreshInterval;
+        } else {
+            // Set default from server
+            document.getElementById('refreshSelect').value = refreshInterval;
+        }
+
         // Initial fetch
         fetchData();
 
         // Auto-refresh
-        document.getElementById('refreshInterval').textContent = refreshInterval;
-        setInterval(fetchData, refreshInterval * 1000);
+        refreshIntervalId = setInterval(fetchData, refreshInterval * 1000);
     </script>
 </body>
 </html>
@@ -1003,34 +1153,66 @@ class WebServer:
                 except Exception:
                     pass  # State saving is non-critical
 
-                # Format response
+                # Format response with FULL suite of information
                 response_data = {
                     'summary': {
-                        'alive_fuzzers': summary.alive_fuzzers,
+                        # Fuzzer counts
                         'total_fuzzers': summary.total_fuzzers,
+                        'alive_fuzzers': summary.alive_fuzzers,
+                        'dead_fuzzers': summary.dead_fuzzers,
+                        'starting_fuzzers': summary.starting_fuzzers,
+
+                        # Runtime
+                        'total_runtime': summary.total_runtime,
+
+                        # Execution stats
                         'total_execs': summary.total_execs,
-                        'current_speed': summary.total_speed,
-                        'avg_speed': summary.current_avg_speed,
+                        'total_speed': summary.total_speed,
+                        'avg_speed_per_core': summary.avg_speed_per_core,
+                        'current_avg_speed': summary.current_avg_speed,
+
+                        # Coverage
                         'max_coverage': summary.max_coverage,
-                        'avg_coverage': summary.max_coverage,
+
+                        # Findings
                         'total_crashes': summary.total_crashes,
                         'total_hangs': summary.total_hangs,
-                        'corpus_count': summary.total_corpus,
-                        'corpus_favored': 0,  # Calculate from all_stats
-                        'pending_total': summary.total_pending,
-                        'pending_favored': summary.total_pending_favs,
+                        'new_crashes': summary.new_crashes,
+                        'new_hangs': summary.new_hangs,
+
+                        # Corpus stats
+                        'total_corpus': summary.total_corpus,
+                        'total_pending': summary.total_pending,
+                        'total_pending_favs': summary.total_pending_favs,
+
+                        # Last activity
+                        'last_find_time': summary.last_find_time,
+                        'last_crash_time': summary.last_crash_time,
+                        'last_hang_time': summary.last_hang_time,
+
+                        # Cycles
+                        'max_cycle': summary.max_cycle,
+                        'avg_cycle': summary.avg_cycle,
+                        'cycles_wo_finds': summary.cycles_wo_finds,
+
+                        # Stability
                         'avg_stability': summary.avg_stability,
                         'min_stability': summary.min_stability,
                         'max_stability': summary.max_stability,
-                        'avg_cycle': summary.avg_cycle,
-                        'max_cycle': summary.max_cycle,
+
+                        # Advanced metrics
+                        'total_edges_found': summary.total_edges_found,
+                        'max_total_edges': summary.max_total_edges,
                     },
                     'system': {
-                        'cpu_cores': system_info.get('cpu_count', 0),
+                        'cpu_count': system_info.get('cpu_count', 0),
                         'cpu_percent': system_info.get('cpu_percent', 0),
                         'memory_total_gb': system_info.get('memory_total_gb', 0),
                         'memory_used_gb': system_info.get('memory_used_gb', 0),
                         'memory_percent': system_info.get('memory_percent', 0),
+                        'disk_total_gb': system_info.get('disk_total_gb', 0),
+                        'disk_used_gb': system_info.get('disk_used_gb', 0),
+                        'disk_percent': system_info.get('disk_percent', 0),
                     },
                     'fuzzers': [
                         {
