@@ -1,15 +1,12 @@
 """Interactive TUI (Text User Interface) for AFL Overseer using Textual."""
 
+from pathlib import Path
+
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, DataTable, Static, TabbedContent, TabPane
-from textual.containers import Container, Vertical, Horizontal
+from textual.widgets import Header, Footer, DataTable, Static
 from textual.reactive import reactive
-from textual import on
 from textual.binding import Binding
 from rich.text import Text
-from datetime import datetime
-import asyncio
-from pathlib import Path
 
 from .monitor import AFLMonitor
 from .models import MonitorConfig
@@ -125,7 +122,6 @@ class SummaryPanel(Static):
 
         # Combine columns side by side with proper alignment
         # Use Rich's Text object to properly handle markup and measure width
-        from rich.text import Text as RichText
         output = []
         max_lines = max(len(left_col), len(right_col))
 
@@ -135,8 +131,8 @@ class SummaryPanel(Static):
 
             if right:
                 # Create Text objects to measure actual rendered width
-                left_text = RichText.from_markup(left)
-                right_text = RichText.from_markup(right)
+                left_text = Text.from_markup(left)
+                right_text = Text.from_markup(right)
 
                 # Calculate padding needed (assume 80 char width, right column at ~55)
                 left_width = len(left_text.plain)

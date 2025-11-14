@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
-import psutil
 import subprocess
 import threading
 from pathlib import Path
 from typing import Optional, Tuple
+
+import psutil
+
 from .models import FuzzerStatus
 from . import constants
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +101,8 @@ class ProcessMonitor:
                         ['fuser', '-v', str(fuzzer_dir)],
                         capture_output=True,
                         text=True,
-                        timeout=constants.FUSER_TIMEOUT
+                        timeout=constants.FUSER_TIMEOUT,
+                        check=False
                     )
                     if 'afl-fuzz' in result.stderr:
                         return True

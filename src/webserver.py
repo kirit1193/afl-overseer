@@ -1,11 +1,9 @@
 """Web server for AFL Overseer dashboard."""
 
 import asyncio
-import json
 import logging
-from pathlib import Path
-from typing import Optional
 import threading
+from pathlib import Path
 
 from aiohttp import web
 
