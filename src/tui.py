@@ -52,30 +52,30 @@ class SummaryPanel(Static):
         left_col = []
         right_col = []
 
-        # LEFT COLUMN - Fuzzing stats
-        # Status line - use dim grey for labels, subtle colors for values
+        # LEFT COLUMN - Fuzzing stats (lighter, more minimalistic colors)
+        # Status line - use lighter grey for labels, subtle colors for values
         alive_color = "#5fd75f" if s.alive_fuzzers > 0 else "#d75f5f"  # Muted green/red
         status = f"[{alive_color}]{s.alive_fuzzers}[/{alive_color}]/{s.total_fuzzers}"
         if s.dead_fuzzers > 0:
-            status += f" [#af5f5f]({s.dead_fuzzers} dead)[/#af5f5f]"
+            status += f" [dim #af5f5f]({s.dead_fuzzers} dead)[/dim #af5f5f]"
         if s.starting_fuzzers > 0:
-            status += f" [#d7af5f]({s.starting_fuzzers} starting)[/#d7af5f]"
-        left_col.append(f"[#808080]fuzzers:[/#808080] {status}")
+            status += f" [dim #d7af5f]({s.starting_fuzzers} starting)[/dim #d7af5f]"
+        left_col.append(f"[dim #606060]fuzzers:[/dim #606060] {status}")
 
         # Total runtime (cumulative across all fuzzers)
         if s.total_runtime > 0:
-            left_col.append(f"[#808080] runtime:[/#808080] {format_duration(s.total_runtime)}")
+            left_col.append(f"[dim #606060] runtime:[/dim #606060] {format_duration(s.total_runtime)}")
 
         # Execution stats
-        left_col.append(f"[#808080]   execs:[/#808080] {format_number(s.total_execs)}")
+        left_col.append(f"[dim #606060]   execs:[/dim #606060] {format_number(s.total_execs)}")
 
         # Coverage - subtle yellow/orange for low coverage (moved above speed)
         cov_color = "#5fd75f" if s.max_coverage > 10 else "#d7af5f" if s.max_coverage > 5 else "#af5f5f"
-        left_col.append(f"[#808080]coverage:[/#808080] [{cov_color}]{format_percent(s.max_coverage)}[/{cov_color}]")
+        left_col.append(f"[dim #606060]coverage:[/dim #606060] [{cov_color}]{format_percent(s.max_coverage)}[/{cov_color}]")
 
-        # Speed (moved below coverage)
+        # Speed (moved below coverage, no space before /core)
         if s.alive_fuzzers > 0:
-            left_col.append(f"[#808080]   speed:[/#808080] {format_speed(s.total_speed)} [dim]({format_speed(s.avg_speed_per_core)} /core)[/dim]")
+            left_col.append(f"[dim #606060]   speed:[/dim #606060] {format_speed(s.total_speed)} [dim]({format_speed(s.avg_speed_per_core)}/core)[/dim]")
 
         # Crashes and Hangs
         crash_color = "#d75f5f" if s.total_crashes > 0 else "#4e4e4e"
@@ -88,18 +88,18 @@ class SummaryPanel(Static):
         if s.new_hangs > 0:
             hang_text += f" [#ff875f](+{s.new_hangs}!)[/#ff875f]"
 
-        left_col.append(f"[#808080] crashes:[/#808080] {crash_text}  [#808080]hangs:[/#808080] {hang_text}")
+        left_col.append(f"[dim #606060] crashes:[/dim #606060] {crash_text}  [dim #606060]hangs:[/dim #606060] {hang_text}")
 
         # Corpus stats - pending paths
-        left_col.append(f"[#808080]  corpus:[/#808080] {format_number(s.total_corpus)}  [#808080]pending:[/#808080] {s.total_pending} [dim]({s.total_pending_favs} favs)[/dim]")
+        left_col.append(f"[dim #606060]  corpus:[/dim #606060] {format_number(s.total_corpus)}  [dim #606060]pending:[/dim #606060] {s.total_pending} [dim]({s.total_pending_favs} favs)[/dim]")
 
         # Last activity (latest find across all fuzzers) - ALWAYS show
         last_find_display = format_time_ago(s.last_find_time) if s.last_find_time > 0 else "never"
-        left_col.append(f"[#808080]last find:[/#808080] {last_find_display}")
+        left_col.append(f"[dim #606060]last find:[/dim #606060] {last_find_display}")
 
         # Total pending paths - ALWAYS show
         pending_color = "#d7af5f" if s.total_pending > 1000 else "#5f8787" if s.total_pending > 0 else "#4e4e4e"
-        left_col.append(f"[#808080] pending:[/#808080] [{pending_color}]{s.total_pending}[/{pending_color}] paths [dim]({s.total_pending_favs} favs)[/dim]")
+        left_col.append(f"[dim #606060] pending:[/dim #606060] [{pending_color}]{s.total_pending}[/{pending_color}] paths [dim]({s.total_pending_favs} favs)[/dim]")
 
         # Cycles without finds indicator - ALWAYS show
         if s.cycles_wo_finds and s.cycles_wo_finds != "N/A" and s.total_fuzzers > 0:
@@ -108,20 +108,20 @@ class SummaryPanel(Static):
             try:
                 cwof_values = [int(x) for x in s.cycles_wo_finds.split('/') if x.isdigit()]
                 max_cwof = max(cwof_values) if cwof_values else 0
-                cwof_color = "#d75f5f" if max_cwof > 50 else "#d7af5f" if max_cwof > 10 else "#808080"
+                cwof_color = "#d75f5f" if max_cwof > 50 else "#d7af5f" if max_cwof > 10 else "#606060"
             except:
-                cwof_color = "#808080"
-            left_col.append(f"[#808080] no finds:[/#808080] [{cwof_color}]{cwof_display}[/{cwof_color}] cycles")
+                cwof_color = "#606060"
+            left_col.append(f"[dim #606060] no finds:[/dim #606060] [{cwof_color}]{cwof_display}[/{cwof_color}] cycles")
         else:
-            left_col.append(f"[#808080] no finds:[/#808080] [dim]N/A[/dim]")
+            left_col.append(f"[dim #606060] no finds:[/dim #606060] [dim]N/A[/dim]")
 
-        # RIGHT COLUMN - System info (right-aligned)
+        # RIGHT COLUMN - System info (right-aligned, lighter colors)
         if sys_info:
-            right_col.append(f"[bold #808080]System[/bold #808080]")
-            # Use text labels instead of icons for better compatibility
-            right_col.append(f"[#5f8787]CPU:[/#5f8787] {sys_info.get('cpu_percent', 0):.1f}%")
-            right_col.append(f"[#875f87]RAM:[/#875f87] {sys_info.get('memory_used_gb', 0):.1f}/{sys_info.get('memory_total_gb', 0):.1f} GB")
-            right_col.append(f"[#5f875f]DSK:[/#5f875f] {sys_info.get('disk_used_gb', 0):.0f}/{sys_info.get('disk_total_gb', 0):.0f} GB")
+            right_col.append(f"[dim #606060]System[/dim #606060]")
+            # Use text labels with lighter colors
+            right_col.append(f"[dim #5f8787]CPU:[/dim #5f8787] {sys_info.get('cpu_percent', 0):.1f}%")
+            right_col.append(f"[dim #875f87]RAM:[/dim #875f87] {sys_info.get('memory_used_gb', 0):.1f}/{sys_info.get('memory_total_gb', 0):.1f} GB")
+            right_col.append(f"[dim #5f875f]DSK:[/dim #5f875f] {sys_info.get('disk_used_gb', 0):.0f}/{sys_info.get('disk_total_gb', 0):.0f} GB")
 
         # Combine columns side by side with proper alignment
         # Use Rich's Text object to properly handle markup and measure width
@@ -312,73 +312,48 @@ class GraphPanel(Static):
         self.refresh()
 
     def render(self) -> str:
-        """Render campaign trend sparkline graphs."""
+        """Render campaign trend sparkline graphs (execution speed only)."""
         if not self.fuzzer_data or not self.monitor:
             return "[dim]Loading graphs...[/dim]"
 
         output = []
-        output.append("\n[bold #808080]Campaign Trends[/bold #808080]\n")
+        output.append("\n[dim #606060]Campaign Trends[/dim #606060]\n")
 
-        # Aggregate data from all fuzzers
+        # Aggregate execution speed data from all fuzzers
         all_speeds = []
-        all_coverage = []
-        all_pending = []
 
         for fuzzer in self.fuzzer_data:
             try:
                 plot_data = self.monitor.get_fuzzer_plot_data(fuzzer.directory, max_points=50)
                 if plot_data:
-                    # Extract values from plot data
+                    # Extract execution speed values from plot data
                     speeds = [p.execs_per_sec for p in plot_data if p.execs_per_sec > 0]
-                    coverage = [p.map_size for p in plot_data if p.map_size > 0]
-                    pending = [p.pending_total for p in plot_data]
 
                     # Collect for aggregate
                     if speeds:
                         all_speeds.extend(speeds)
-                    if coverage:
-                        all_coverage.extend(coverage)
-                    if pending:
-                        all_pending.extend(pending)
 
             except Exception as e:
                 # Skip fuzzers with no plot data
                 continue
 
-        # Show aggregate campaign trends
+        # Show execution speed trend only
         if all_speeds:
+            # Get console width and calculate graph width
+            # Leave room for label and padding (about 45 chars)
+            console_width = self.app.size.width if hasattr(self.app, 'size') else 120
+            graph_width = max(40, min(80, console_width - 45))
+
             # Sample to get trend over time
-            sample_size = min(len(all_speeds), 60)
+            sample_size = min(len(all_speeds), graph_width)
             step = max(1, len(all_speeds) // sample_size)
-            sampled = all_speeds[::step][:60]
+            sampled = all_speeds[::step][:graph_width]
 
-            sparkline = generate_sparkline(sampled, width=60)
+            sparkline = generate_sparkline(sampled, width=graph_width)
+            avg_speed = sum(sampled) / len(sampled)
             output.append(
-                f"  [#808080]Execution speed:[/#808080]  [#5fd75f]{sparkline}[/#5fd75f]  "
-                f"[dim]avg: {sum(sampled)/len(sampled):.0f} ex/s[/dim]\n"
-            )
-
-        if all_coverage:
-            sample_size = min(len(all_coverage), 60)
-            step = max(1, len(all_coverage) // sample_size)
-            sampled = all_coverage[::step][:60]
-
-            sparkline = generate_sparkline(sampled, width=60)
-            output.append(
-                f"  [#808080]Code coverage:  [/#808080]  [#d7af5f]{sparkline}[/#d7af5f]  "
-                f"[dim]avg: {sum(sampled)/len(sampled):.1f}%[/dim]\n"
-            )
-
-        if all_pending:
-            sample_size = min(len(all_pending), 60)
-            step = max(1, len(all_pending) // sample_size)
-            sampled = all_pending[::step][:60]
-
-            sparkline = generate_sparkline(sampled, width=60)
-            avg_pending = sum(sampled) / len(sampled)
-            output.append(
-                f"  [#808080]Pending paths:  [/#808080]  [#af5f5f]{sparkline}[/#af5f5f]  "
-                f"[dim]avg: {avg_pending:.0f}[/dim]\n"
+                f"  [dim #606060]Execution speed:[/dim #606060]  [#5fd75f]{sparkline}[/#5fd75f]  "
+                f"[dim]avg: {avg_speed:.0f}/s[/dim]\n"
             )
 
         if len(output) == 1:  # Only header
@@ -440,10 +415,10 @@ class AFLMonitorApp(App):
     }
 
     .detail-info {
-        padding: 1 2;
+        padding: 0 2;
         background: #0f0f0f;
-        color: #606060;
-        margin: 0 1 1 1;
+        color: #505050;
+        margin: 0 1 0 1;
     }
 
     GraphPanel {
@@ -543,15 +518,15 @@ class AFLMonitorApp(App):
                 if self.paused:
                     detail_info += " | [yellow]PAUSED[/yellow]"
 
-                # Add command line if available
+                # Add command line if available (lighter, sleeker)
                 if self.command_line:
-                    detail_info += f"\n[dim]cmd:[/dim] {self.command_line}"
+                    detail_info += f"\n[dim #404040]cmd:[/dim #404040] [dim]{self.command_line}[/dim]"
                 elif all_stats:
                     # Get command line from first fuzzer
                     cmd = all_stats[0].command_line
                     if cmd:
                         self.command_line = cmd
-                        detail_info += f"\n[dim]cmd:[/dim] {cmd}"
+                        detail_info += f"\n[dim #404040]cmd:[/dim #404040] [dim]{cmd}[/dim]"
 
                 self.query_one("#detail-info", Static).update(detail_info)
             except Exception as e:
