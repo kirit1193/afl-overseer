@@ -13,16 +13,16 @@ _ANSI_ESCAPE_PATTERN = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 def format_duration(seconds: int) -> str:
     """
-    Format duration in seconds to human-readable string.
+    Format duration in seconds to compact string.
 
     Args:
         seconds: Duration in seconds
 
     Returns:
-        Formatted string like "2 days, 3 hours" or "45 minutes, 12 seconds"
+        Formatted string like "2d3h15m" or "1h42m30s"
     """
     if seconds <= 0:
-        return "0 seconds"
+        return "0s"
 
     days = seconds // 86400
     hours = (seconds % 86400) // 3600
@@ -31,15 +31,15 @@ def format_duration(seconds: int) -> str:
 
     parts = []
     if days > 0:
-        parts.append(f"{days} day{'s' if days != 1 else ''}")
+        parts.append(f"{days}d")
     if hours > 0:
-        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+        parts.append(f"{hours}h")
     if minutes > 0 and days == 0:  # Don't show minutes if showing days
-        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+        parts.append(f"{minutes}m")
     if secs > 0 and days == 0 and hours == 0:  # Only show seconds for short durations
-        parts.append(f"{secs} second{'s' if secs != 1 else ''}")
+        parts.append(f"{secs}s")
 
-    return ", ".join(parts[:2])  # Show at most 2 units
+    return "".join(parts[:3]) if parts else "0s"  # Show at most 3 units
 
 
 def format_time_ago(timestamp: int) -> str:
@@ -128,14 +128,14 @@ def format_speed(execs_per_sec: float) -> str:
         execs_per_sec: Executions per second
 
     Returns:
-        Formatted string like "1,234.56 ex/s"
+        Formatted string like "1,234.56/s"
     """
     if execs_per_sec >= 1000:
-        return f"{execs_per_sec:,.2f} ex/s"
+        return f"{execs_per_sec:,.0f}/s"
     elif execs_per_sec >= 1:
-        return f"{execs_per_sec:.2f} ex/s"
+        return f"{execs_per_sec:.1f}/s"
     else:
-        return f"{execs_per_sec:.4f} ex/s"
+        return f"{execs_per_sec:.2f}/s"
 
 
 def format_percent(value: float, decimals: int = 2) -> str:
